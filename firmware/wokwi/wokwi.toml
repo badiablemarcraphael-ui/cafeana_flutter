@@ -1,0 +1,18 @@
+[wokwi]
+version = 1
+elf = ../.pio/build/esp32dev_mock/firmware.elf
+firmware = ../.pio/build/esp32dev_mock/firmware.bin
+
+# ── Wokwi project metadata ────────────────────────────────────────────────────
+# This file tells Wokwi where to find the compiled binary.
+#
+# BUILD STEPS (PlatformIO):
+#   1. Open firmware/ folder in VS Code (with PlatformIO extension installed)
+#   2. Run:  pio run -e esp32dev_mock
+#   3. The binary is created at .pio/build/esp32dev_mock/firmware.bin
+#   4. Open this wokwi.toml in Wokwi VS Code extension  OR
+#      paste diagram.json into wokwi.com → New Project → ESP32
+#
+# SWITCHING TO LIVE MODE:
+#   Change elf/firmware paths above to use "esp32dev" instead of "esp32dev_mock"
+#   Then rebuild with:  pio run -e esp32dev

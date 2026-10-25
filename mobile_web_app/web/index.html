@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="description" content="Caféana — Artisanal coffee, seamless orders, and warm community vibes.">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Caféana">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>Caféana</title>
+  <link rel="manifest" href="manifest.json">
+
+  <!-- Pre-Flutter Branded Loading Screen Styles -->
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      background-color: #FCFAF8;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      overflow: hidden;
+    }
+    #cafeana-web-loader {
+      position: fixed;
+      inset: 0;
+      z-index: 999999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(180deg, #F9F4EE 0%, #F4ECE1 40%, #FCFAF8 100%);
+      transition: opacity 0.4s ease-out, visibility 0.4s ease-out;
+    }
+    #cafeana-web-loader.fade-out {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+    .loader-box {
+      text-align: center;
+      padding: 24px;
+      max-width: 380px;
+      width: 90%;
+      animation: fadeIn 0.6s ease-out;
+    }
+    .logo-container {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 24px;
+    }
+    .pulse-ring {
+      position: absolute;
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      background: rgba(200, 141, 93, 0.2);
+      animation: pulseGlow 2s infinite ease-in-out;
+    }
+    .logo-badge {
+      position: relative;
+      width: 96px;
+      height: 96px;
+      background: #FFFFFF;
+      border-radius: 50%;
+      box-shadow: 0 12px 32px rgba(44, 36, 32, 0.12);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .logo-badge img {
+      width: 60px;
+      height: 60px;
+      object-fit: contain;
+      border-radius: 50%;
+    }
+    .brand-title {
+      font-size: 32px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      color: #2C2420;
+      margin-bottom: 8px;
+    }
+    .brand-subtitle {
+      font-size: 14px;
+      color: #6E5F55;
+      margin-bottom: 28px;
+      letter-spacing: 0.3px;
+    }
+    .progress-track {
+      width: 100%;
+      height: 4px;
+      background: #E8D5C4;
+      border-radius: 8px;
+      overflow: hidden;
+      position: relative;
+    }
+    .progress-bar {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      width: 45%;
+      background: #C88D5D;
+      border-radius: 8px;
+      animation: indeterminateBar 1.6s infinite ease-in-out;
+    }
+    .loader-fallback {
+      display: none;
+      margin-top: 24px;
+      animation: fadeIn 0.4s ease-out;
+    }
+    .loader-fallback p {
+      font-size: 13px;
+      color: #8C7A6B;
+      margin-bottom: 12px;
+    }
+    .reload-button {
+      background: #C88D5D;
+      color: #FFFFFF;
+      border: none;
+      padding: 10px 20px;
+      font-size: 14px;
+      font-weight: 600;
+      border-radius: 12px;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(200, 141, 93, 0.3);
+      transition: background 0.2s, transform 0.1s;
+    }
+    .reload-button:hover {
+      background: #B67A4B;
+      transform: translateY(-1px);
+    }
+    @keyframes pulseGlow {
+      0%, 100% { transform: scale(0.9); opacity: 0.4; }
+      50% { transform: scale(1.18); opacity: 0.85; }
+    }
+    @keyframes indeterminateBar {
+      0% { left: -45%; width: 35%; }
+      50% { left: 35%; width: 55%; }
+      100% { left: 100%; width: 35%; }
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+  <!-- Pre-Flutter Loading Screen (prevents white dead screen during download) -->
+  <div id="cafeana-web-loader">
+    <div class="loader-box">
+      <div class="logo-container">
+        <div class="pulse-ring"></div>
+        <div class="logo-badge">
+          <img src="favicon.png" alt="Caféana" onerror="this.style.display='none'; document.getElementById('coffee-fallback-icon').style.display='block';" />
+          <svg id="coffee-fallback-icon" style="display:none; width:44px; height:44px; fill:#C88D5D;" viewBox="0 0 24 24">
+            <path d="M20 3H4v10c0 2.21 1.79 4 4 4h6c2.21 0 4-1.79 4-4v-3h2c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 5h-2V5h2v3zM4 19h16v2H4z"/>
+          </svg>
+        </div>
+      </div>
+      <div class="brand-title">Caféana</div>
+      <div class="brand-subtitle">Brewing your experience...</div>
+      <div class="progress-track">
+        <div class="progress-bar"></div>
+      </div>
+      <div id="loader-timeout-fallback" class="loader-fallback">
+        <p>Taking longer than expected?</p>
+        <button class="reload-button" onclick="window.location.reload()">Reload App</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Watchdog to reveal fallback if Flutter download takes > 9 seconds
+    setTimeout(function() {
+      var fallback = document.getElementById('loader-timeout-fallback');
+      if (fallback && document.getElementById('cafeana-web-loader')) {
+        fallback.style.display = 'block';
+      }
+    }, 9000);
+
+    // Function to gracefully dismiss the web loader
+    function dismissWebLoader() {
+      var loader = document.getElementById('cafeana-web-loader');
+      if (loader && !loader.classList.contains('fade-out')) {
+        loader.classList.add('fade-out');
+        setTimeout(function() {
+          if (loader && loader.parentNode) {
+            loader.parentNode.removeChild(loader);
+          }
+        }, 500);
+      }
+    }
+
+    // Listen for Flutter's first-frame event
+    window.addEventListener('flutter-first-frame', dismissWebLoader);
+
+    // Mutation observer as a secondary detector when flutter-view element mounts
+    var observer = new MutationObserver(function(mutations, obs) {
+      for (var i = 0; i < mutations.length; i++) {
+        for (var j = 0; j < mutations[i].addedNodes.length; j++) {
+          var node = mutations[i].addedNodes[j];
+          if (node.nodeName === 'FLUTTER-VIEW' || 
+              node.tagName === 'FLUTTER-VIEW' || 
+              node.id === 'flutter-view' ||
+              (node.classList && node.classList.contains('flutter-view'))) {
+            dismissWebLoader();
+            obs.disconnect();
+            return;
+          }
+        }
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+  </script>
+
+  <!-- Register Web Push Notification Service Worker -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('firebase-messaging-sw.js')
+          .then(function(reg) {
+            console.log('[WebPush] Service worker active:', reg.scope);
+          })
+          .catch(function(err) {
+            console.warn('[WebPush] Service worker registration error:', err);
+          });
+      });
+    }
+
+    // Web Taskbar Notification API Helpers
+    window.cafeanaRequestNotificationPermission = async function() {
+      if (!('Notification' in window)) {
+        console.warn('[WebNotification] Notifications API not supported in this browser.');
+        return 'unsupported';
+      }
+      try {
+        const permission = await Notification.requestPermission();
+        console.log('[WebNotification] Permission result:', permission);
+        return permission;
+      } catch (e) {
+        console.warn('[WebNotification] Error requesting permission:', e);
+        return 'denied';
+      }
+    };
+
+    window.cafeanaGetNotificationPermission = function() {
+      if (!('Notification' in window)) return 'unsupported';
+      return Notification.permission;
+    };
+
+    // Proactively request notification permissions on first interaction anywhere
+    const autoRequestNotifs = async () => {
+      if ('Notification' in window && Notification.permission === 'default') {
+        try {
+          await Notification.requestPermission();
+        } catch (e) {}
+      }
+    };
+    window.addEventListener('click', autoRequestNotifs, { once: true });
+    window.addEventListener('touchstart', autoRequestNotifs, { once: true });
+    window.addEventListener('keydown', autoRequestNotifs, { once: true });
+
+    window.cafeanaShowNotification = async function(title, body, tag, icon) {
+      if (!('Notification' in window)) return false;
+      if (Notification.permission !== 'granted') {
+        if (Notification.permission === 'default') {
+          try {
+            const p = await Notification.requestPermission();
+            if (p !== 'granted') return false;
+          } catch (e) {
+            return false;
+          }
+        } else {
+          console.log('[WebNotification] Permission not granted, currently:', Notification.permission);
+          return false;
+        }
+      }
+
+      try {
+        const notifIcon = icon || 'favicon.png';
+        // Priority 1: ServiceWorker registration (triggers system taskbar toast even for background tabs)
+        if ('serviceWorker' in navigator) {
+          const reg = await navigator.serviceWorker.getRegistration();
+          if (reg && typeof reg.showNotification === 'function') {
+            await reg.showNotification(title, {
+              body: body,
+              icon: notifIcon,
+              badge: notifIcon,
+              tag: tag || 'cafeana-order',
+              renotify: true,
+              requireInteraction: false,
+              vibrate: [200, 100, 200]
+            });
+            console.log('[WebNotification] Displayed via ServiceWorker:', title);
+            return true;
+          }
+        }
+
+        // Priority 2: Direct browser Notification constructor
+        const notif = new Notification(title, {
+          body: body,
+          icon: notifIcon,
+          tag: tag || 'cafeana-order',
+          renotify: true
+        });
+        notif.onclick = function() {
+          window.focus();
+          notif.close();
+        };
+        console.log('[WebNotification] Displayed via Notification API:', title);
+        return true;
+      } catch (err) {
+        console.warn('[WebNotification] Error showing notification:', err);
+        return false;
+      }
+    };
+  </script>
+
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>

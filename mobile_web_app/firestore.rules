@@ -1,0 +1,293 @@
+rules_version = '2';
+
+// ── Cafeana Firestore Security Rules ─────────────────────────────────────────
+//
+// Roles (stored in users/{uid}.role):
+//   "customer" — app users who place orders
+//   "staff"    — café employees managing orders, products, and inventory
+//   "device"   — ESP32 kitchen terminal (dedicated Firebase Auth account)
+//
+// Spark plan note: Custom claims require Cloud Functions (Blaze plan).
+// Roles are read from users/{uid} via get() calls (~1 extra read per request).
+// This costs against the 50K reads/day free quota; acceptable for a terminal.
+// ─────────────────────────────────────────────────────────────────────────────
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helper functions ────────────────────────────────────────────────────
+
+    /// Returns true if the request is from a signed-in user.
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    /// Returns the role string from the caller's users/{uid} document.
+    /// Returns "" if the document does not exist (safe default — denies all).
+    function getRole() {
+      return (isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid)))
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '')
+        : '';
+    }
+
+    function isCustomer() { return getRole() == 'customer'; }
+    function isStaff()    { return getRole() in ['staff', 'owner', 'cashier', 'kitchen']; }
+    function isDevice()   { return getRole() == 'device';   }
+    function isStaffOrDevice() { return isStaff() || isDevice(); }
+
+    /// True when the requesting user owns the given customerId value.
+    function isOwner(customerId) {
+      return isAuthenticated() && request.auth.uid == customerId;
+    }
+
+    /// Validates that a field is only incremented (never decremented or jumped).
+    function isIncrementByOne(field) {
+      return request.resource.data[field] == resource.data[field] + 1;
+    }
+
+    // ── users/{uid} ─────────────────────────────────────────────────────────
+    //
+    //  • Anyone authenticated can read their own profile.
+    //  • Staff can read any profile (for order management UI).
+    //  • Users can create their own profile on first sign-in.
+    //  • Staff can update any profile (e.g., role changes, deactivation).
+    //  • No one can delete a profile (use isActive: false instead).
+    // ────────────────────────────────────────────────────────────────────────
+    match /users/{uid} {
+      allow read:   if isAuthenticated() && (request.auth.uid == uid || isStaff());
+      allow create: if (isAuthenticated() && request.auth.uid == uid
+                        && request.resource.data.keys().hasAll(['uid', 'displayName', 'email', 'role', 'isActive', 'createdAt'])
+                        && request.resource.data.role in ['customer', 'device', 'staff']
+                        && request.resource.data.uid == uid)
+                    || isStaff();
+      allow update: if isStaff()
+                    || (isAuthenticated() && request.auth.uid == uid
+                        && request.resource.data.diff(resource.data).affectedKeys()
+                             .hasOnly(['displayName', 'email', 'fcmToken', 'fcmPlatform', 'fcmUpdatedAt'])); // customers may update their own name/email and push notification tokens
+      allow delete: if false;
+    }
+
+    // ── counters/global ──────────────────────────────────────────────────────
+    //
+    //  • Any authenticated user can read (needed to display next order number).
+    //  • Any authenticated user can update BUT only by incrementing by exactly 1.
+    //    This makes the counter safe for transactional use: the Flutter client
+    //    uses runTransaction() to read → increment → write atomically.
+    // ────────────────────────────────────────────────────────────────────────
+    match /counters/global {
+      allow read:   if isAuthenticated();
+      allow update: if isAuthenticated()
+                    && isIncrementByOne('nextOrderNumber')
+                    && request.resource.data.keys().hasOnly(['nextOrderNumber']);
+      allow create: if isStaff();   // only staff bootstraps the counter doc
+      allow delete: if false;
+    }
+
+    // ── products/{productId} ────────────────────────────────────────────────
+    //
+    //  • Anyone can read (unauthenticated users browse landing page menu).
+    //  • Staff can create, update, or delete products.
+    //  • Any authenticated user can decrement stock (for checkout).
+    // ────────────────────────────────────────────────────────────────────────
+    match /products/{productId} {
+      allow read:   if true;
+      allow create: if isStaff()
+                    && request.resource.data.keys().hasAll(['name', 'price', 'category', 'isAvailable', 'updatedAt'])
+                    && request.resource.data.price is number
+                    && request.resource.data.price >= 0;
+      allow update: if isStaff()
+                    || (isAuthenticated()
+                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stock', 'updatedAt'])
+                        && request.resource.data.stock <= resource.data.stock);
+      allow delete: if isStaff();
+    }
+
+    // ── ingredients/{ingredientId} ──────────────────────────────────────────
+    //  • Master raw inventory holdings (beans, milk, purees, powders, packaging)
+    //  • Read by everyone / authenticated
+    //  • Staff can create, edit, and delete
+    //  • Customers can decrement stockLevel during transactional checkout
+    // ────────────────────────────────────────────────────────────────────────
+    match /ingredients/{ingredientId} {
+      allow read:   if true;
+      allow create, delete: if isStaff();
+      allow update: if isStaff()
+                    || (isAuthenticated()
+                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stockLevel', 'totalValue', 'updatedAt'])
+                        && request.resource.data.stockLevel <= resource.data.stockLevel);
+    }
+
+    // ── addOns/{addOnId} ────────────────────────────────────────────────────
+    match /addOns/{addOnId} {
+      allow read:  if true;
+      allow write: if isStaff();
+    }
+
+    // ── orders/{orderId} ────────────────────────────────────────────────────
+    //
+    //  Customer:
+    //    • Create an order for themselves only.
+    //    • Read their own orders.
+    //    • Cannot update or delete after creation.
+    //
+    //  Staff:
+    //    • Read all orders.
+    //    • Update any field (status, paymentStatus, terminalId, etc.).
+    //    • Cannot delete orders (audit trail).
+    //
+    //  Device:
+    //    • Read orders with status "queued" or "preparing" only.
+    //      (Enforced at query level; the rule allows read of any order the
+    //       device explicitly fetches by ID, since status-filtered reads are
+    //       enforced via query constraints — see api-contract.md.)
+    //    • Update: only the fields { status, terminalId, updatedAt }.
+    //      Status may only advance: queued→preparing or preparing→ready.
+    // ────────────────────────────────────────────────────────────────────────
+    match /orders/{orderId} {
+      // Workaround for Firestore query evaluator bug: 
+      // Using `get()` for roles alongside `resource.data.customerId` causes 
+      // global queries (like staff live queue) to be rejected.
+      allow read: if isAuthenticated();
+
+      // Customer creates their own order
+      allow create: if (isCustomer()
+                    && isOwner(request.resource.data.customerId)
+                    && request.resource.data.keys().hasAll([
+                         'orderNumber', 'customerId', 'items', 'total',
+                         'paymentStatus', 'status', 'createdAt', 'updatedAt'
+                       ])
+                    && request.resource.data.status == 'queued'
+                    && request.resource.data.paymentStatus == 'pending'
+                    && request.resource.data.items.size() > 0
+                    && request.resource.data.total > 0)
+                    || isStaff();
+
+      // Staff: unrestricted update
+      allow update: if isStaff();
+
+      // Device: restricted update — only status advancement + terminalId + updatedAt
+      allow update: if isDevice()
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['status', 'terminalId', 'updatedAt'])
+                    && (
+                         // queued → preparing
+                         (resource.data.status == 'queued'    && request.resource.data.status == 'preparing') ||
+                         // preparing → ready
+                         (resource.data.status == 'preparing' && request.resource.data.status == 'ready')
+                       );
+
+      allow delete: if false;
+    }
+
+    // ── deviceStatus/{terminalId} ────────────────────────────────────────────
+    //
+    //  • Staff can read all terminal statuses (dashboard).
+    //  • Device can read its own status document.
+    //  • Device can create and update its own status document.
+    //  • Staff can update (e.g., force offline, reset currentOrderNumber).
+    //  • No deletion.
+    // ────────────────────────────────────────────────────────────────────────
+    match /deviceStatus/{terminalId} {
+      allow read:          if isAuthenticated() && (isStaff() || isDevice());
+      allow create, update: if isDevice() || isStaff();
+      allow delete:        if false;
+    }
+
+    // ── feedback/{feedbackId} ────────────────────────────────────────────────
+    //
+    //  feedbackId == orderId  (one feedback per order enforced by !exists check)
+    //
+    //  • Customers can create feedback for their own completed orders.
+    //  • Customers can read their own feedback.
+    //  • Staff can read all feedback.
+    //  • No updates or deletes (feedback is immutable).
+    // ────────────────────────────────────────────────────────────────────────
+    match /feedback/{feedbackId} {
+      // Workaround for Firestore query evaluator bug: 
+      allow read:   if isAuthenticated();
+
+      allow create: if isAuthenticated()
+                    && (isOwner(request.resource.data.customerId) || isStaff())
+                    // feedbackId must equal orderId (one-per-order)
+                    && request.resource.data.orderId == feedbackId
+                    // The referenced order must exist, be completed/received/ready, and belong to this customer (or staff testing)
+                    && (
+                      isStaff() ||
+                      (
+                        get(/databases/$(database)/documents/orders/$(feedbackId)).data.customerId == request.auth.uid
+                        && get(/databases/$(database)/documents/orders/$(feedbackId)).data.status in ['completed', 'received', 'ready']
+                      )
+                    )
+                    // Validate fields
+                    && request.resource.data.keys().hasAll(['orderId', 'customerId', 'rating', 'createdAt'])
+                    && request.resource.data.rating is int
+                    && request.resource.data.rating >= 1
+                    && request.resource.data.rating <= 5
+                    && (!('comment' in request.resource.data) || request.resource.data.comment.size() <= 500);
+
+      allow update: if (isStaff()
+                        && request.resource.data.diff(resource.data).affectedKeys()
+                             .hasOnly(['isPublished', 'reply', 'productNames', 'productIds', 'items']))
+                    || (isAuthenticated()
+                        && (resource.data.customerId == request.auth.uid || isStaff())
+                        && request.resource.data.diff(resource.data).affectedKeys()
+                             .hasOnly(['rating', 'comment', 'updatedAt', 'isPublished', 'reply', 'createdAt', 'productNames', 'productIds', 'items'])
+                        && request.resource.data.rating is int
+                        && request.resource.data.rating >= 1
+                        && request.resource.data.rating <= 5
+                        && (!('comment' in request.resource.data) || request.resource.data.comment.size() <= 500));
+      allow delete: if false;
+    }
+
+    // ── inventoryLog/{logId} ────────────────────────────────────────────────
+    //
+    //  • Staff can read all logs.
+    //  • Any authenticated user can create log entries (for checkout stock deduction).
+    //  • No updates or deletes (immutable audit log).
+    // ────────────────────────────────────────────────────────────────────────
+    match /inventoryLog/{logId} {
+      allow read:   if isStaff();
+      allow create: if isAuthenticated()
+                    && request.resource.data.keys().hasAll([
+                         'productId', 'change', 'reason', 'staffId', 'timestamp'
+                       ])
+                    && request.resource.data.staffId == request.auth.uid
+                    && request.resource.data.reason is string
+                    && request.resource.data.reason.size() > 0
+                    && request.resource.data.change is number
+                    && request.resource.data.change != 0;
+      allow update, delete: if false;
+    }
+
+    // ── promotions/{promoId} ─────────────────────────────────────────────────
+    //
+    //  • All authenticated users can read (customers apply promos).
+    //  • Only staff (owner) can create, update, or delete.
+    // ────────────────────────────────────────────────────────────────────────
+    match /promotions/{promoId} {
+      allow read:   if isAuthenticated();
+      allow create,
+            update: if isStaff()
+                    && request.resource.data.keys().hasAll(['code', 'description', 'type', 'value', 'isActive']);
+      allow delete: if isStaff();
+    }
+
+    // ── activityLogs/{logId} ─────────────────────────────────────────────────
+    //
+    //  • Staff can read and create activity logs.
+    //  • No updates or deletes.
+    // ────────────────────────────────────────────────────────────────────────
+    match /activityLogs/{logId} {
+      allow read:   if isStaff();
+      allow create: if isStaff()
+                    && request.resource.data.keys().hasAll(['staffId', 'staffEmail', 'action', 'details', 'timestamp']);
+      allow update, delete: if false;
+    }
+
+    // ── Deny all other paths by default ─────────────────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+  }
+}

@@ -1,0 +1,6 @@
+owner@seed.com
+customer@seed.com
+kitchen@seed.com
+cashier@seed.com
+
+password123

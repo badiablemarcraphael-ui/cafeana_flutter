@@ -1,0 +1,43 @@
+# ── Monorepo root .gitignore ──────────────────────────────────────────────────
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDEs
+.idea/
+.vscode/settings.json
+*.iml
+
+# ── Flutter / Dart ─────────────────────────────────────────────────────────────
+mobile_web_app/.dart_tool/
+mobile_web_app/.flutter-plugins
+mobile_web_app/.flutter-plugins-dependencies
+mobile_web_app/.pub-cache/
+mobile_web_app/.pub/
+mobile_web_app/build/
+mobile_web_app/android/.gradle/
+mobile_web_app/android/app/google-services.json
+mobile_web_app/ios/Flutter/.last_build_id
+mobile_web_app/ios/Pods/
+mobile_web_app/ios/.symlinks/
+
+# Firebase secrets — never commit real credentials
+mobile_web_app/lib/firebase_options.dart.bak
+
+# ── PlatformIO / Firmware ──────────────────────────────────────────────────────
+firmware/.pio/
+firmware/.pioenvs/
+firmware/.piolibdeps/
+firmware/.vscode/
+compile_commands.json
+.clangd
+.clangd/
+
+# ── Dependencies & Virtual Environments ────────────────────────────────────────
+.venv/
+node_modules/
+mobile_web_app/node_modules/
+__pycache__/
+*.pyc
