@@ -23,8 +23,10 @@ mobile_web_app/ios/Flutter/.last_build_id
 mobile_web_app/ios/Pods/
 mobile_web_app/ios/.symlinks/
 
-# Firebase secrets — never commit real credentials
+# Firebase secrets and local cache
 mobile_web_app/lib/firebase_options.dart.bak
+mobile_web_app/.firebase/
+.firebase/
 
 # ── PlatformIO / Firmware ──────────────────────────────────────────────────────
 firmware/.pio/

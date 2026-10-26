@@ -4,6 +4,8 @@
 *.pyc
 *.swp
 .DS_Store
+.firebase/
+firebase-debug.log*
 .atom/
 .build/
 .buildlog/
