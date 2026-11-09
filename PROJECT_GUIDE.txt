@@ -40,7 +40,10 @@ docs/                    Technical documentation (markdown files)
 CAFEANA_SYSTEM_GUIDE.md  Explains the architecture and order flow + how
                          to test customer and staff at the same time
 walkthrough.md           End-to-end manual testing checklist
-PROJECT_GUIDE.txt        This file
+PROJECT_GUIDE.txt        This file (complete system & code reference)
+seed_mock_orders.js      Node.js REST seeder script that populates Firestore
+                         with 60 days of realistic past orders (10-15
+                         drinks/day) to test analytics & machine learning
 users.txt                List of test/seed login accounts
 asd.txt                  Personal scratch note (email addresses)
 .gitignore               Tells git which files NOT to upload
@@ -117,6 +120,8 @@ test_nav.dart            Throwaway test of a navigation bar layout
 
 assets/images/           Logo and drink pictures shown in the menu
   drinks/                  One PNG per drink (file name = product name)
+  qr.jpg                   Official store payment QR code image used for
+                           cashier and customer QR payments
 
 android/                 Android-specific project (app icon, permissions,
                          google-services.json)
@@ -218,7 +223,10 @@ core/theme/
 core/utils/  -> HELPER TOOLS
   asset_resolver.dart        Matches a product name to its drink picture
   dialog_utils.dart          Reusable confirm dialogs + snackbars
-  export_csv_util.dart       Exports analytics / inventory to CSV files
+  export_csv_util.dart       Exports analytics / inventory reports to Microsoft
+                             Excel (.xlsx) workbooks with auto-fit column
+                             widths, bold headers, and native double/int numbers
+                             (automatic fallback to CSV)
   profanity_filter.dart      Blocks bad words (English + Tagalog) in
                              feedback and comments
   seed_db.dart               Fills the database with starter menu,
@@ -234,8 +242,9 @@ core/widgets/  -> REUSABLE UI PIECES
   cafeana_loading_screen.dart Branded loading screen
   cafeana_error_recovery_screen.dart Friendly error screen (instead of
                              a red/blank crash screen)
-  nav_toggle_handle.dart     The small tab that opens/closes the
-                             navigation bars
+  nav_toggle_handle.dart     Floating toggle tab that smoothly slides the
+                             navigation bars in/out on click without
+                             auto-hiding while scrolling
   floating_nav_bar.dart      Old floating nav bar (currently NOT used)
   shimmer_loader.dart        Shimmer loading placeholder (currently NOT
                              used)
@@ -246,8 +255,10 @@ core/widgets/  -> REUSABLE UI PIECES
 
 features/public/pages/
   landing_page.dart          Public homepage before login: menu preview,
-                             About Us, Contact Us footer (phone, email,
-                             address, opening hours)
+                             About Us, Contact Us footer with store phone
+                             (09628769611), email (cafeana@gmail.com), slogan
+                             ("To infinity and beyond better café!"), hours
+                             (9:00AM to 1:00AM daily), and map address
 
 features/auth/presentation/
   login_page.dart            Login + Register tabs, forgot password,
@@ -256,14 +267,15 @@ features/auth/presentation/
 
 features/customer/  (CUSTOMER APP)
   shell/customer_shell.dart  Bottom navigation bar (Home, Menu, Cart,
-                             Orders, Profile) with open/close handle
+                             Orders, Profile) with toggle handle
   pages/
     customer_home_page.dart    Home: active order card, promos, shortcuts,
                                shop location
     customer_menu_page.dart    Full menu grouped by category
     cart_page.dart             Shopping cart (change qty, remove)
     checkout_page.dart         Order summary, promo, place the order
-    order_tracking_page.dart   Live order status (queued -> ready)
+    order_tracking_page.dart   Live order status (queued -> ready) with
+                               "Pay with QR" card for pending payments
     order_history_page.dart    List of past orders
     feedback_page.dart         Rate an order (stars + comment)
     community_feedback_page.dart See other customers' reviews
@@ -277,17 +289,19 @@ features/customer/  (CUSTOMER APP)
 
 features/staff/  (STAFF / OWNER DASHBOARD)
   shell/staff_shell.dart     Left side navigation rail (pages shown
-                             depend on role) with open/close handle
+                             depend on role) with toggle handle
   pages/
     staff_home_page.dart       Dashboard: today's stats + shortcuts
     staff_orders_page.dart     "Queue" - active orders; change status
-                               (prepare / ready / complete / cancel)
+                               (prepare / ready / complete / cancel) with
+                               "Show Payment QR" dialog button
     staff_order_feed_page.dart "Feed" - read-only history of all orders
     staff_menu_page.dart       Add / edit / hide menu products
     staff_inventory_page.dart  Ingredients stock, restock, recipes,
                                how many drinks can still be made
-    staff_analytics_page.dart  Charts, sales reports, forecasts, CSV
-                               export (owner only)
+    staff_analytics_page.dart  Interactive charts, revenue pace vs order
+                               volume forecasts, AI insights, Excel (.xlsx)
+                               and CSV exports (owner only)
     staff_feedback_page.dart   Read and reply to customer feedback
     staff_users_page.dart      Manage users and change roles
     staff_transactions_page.dart "Sales" - all transactions / payments
@@ -297,6 +311,8 @@ features/staff/  (STAFF / OWNER DASHBOARD)
   widgets/
     analytics_charts.dart      Line and bar chart widgets for analytics
     device_status_banner.dart  Warning banner when the ESP32 is offline
+                               (displayed on device monitoring page; removed
+                               from top header to avoid clutter)
 
 ---------------------------------------------------------------------
  lib/models/
@@ -354,4 +370,430 @@ These files contain private info and are currently uploaded to git:
 If your GitHub repo is public, consider removing them from git
 (git rm --cached <file>), adding them to .gitignore, and changing the
 device password.
+
+
+=====================================================================
+ FREQUENTLY ASKED QUESTIONS (FAQ)
+=====================================================================
+
+Q: If I download this project as a ZIP on another laptop, do the
+   packages and dependencies still come with it?
+A: No, and that is completely normal and intentional!
+   In modern Flutter, Dart, and Node.js projects, heavy build and
+   dependency folders (such as "node_modules", ".dart_tool", "build/",
+   and ".venv/") are excluded from Git and ZIP downloads to keep the
+   project lightweight and avoid system conflicts across different OSes.
+
+   When you open the project on another laptop:
+     1. Make sure Flutter SDK and Git are installed.
+     2. Open your terminal in the "mobile_web_app" folder.
+     3. Run:
+          flutter pub get
+        Flutter will read "pubspec.yaml" and automatically download
+        every single package and library needed within seconds!
+     4. (Optional) If you also want to use the background push
+        notification dispatcher on that laptop, open "mobile_web_app/functions"
+        and run:
+          npm install
+
+Q: How do I test the analytics if I just installed a fresh database?
+A: You can seed realistic order data using our included REST seeder:
+     1. Open the project root in your terminal.
+     2. Run:
+          node seed_mock_orders.js
+     This automatically creates 60 days of historical completed orders
+     (10-15 drinks/day, totaling ~₱100,000 across 538 orders) with
+     realistic customer buying patterns, rush hours, and weekend surges.
+
+
+=====================================================================
+  ANALYTICS & MACHINE LEARNING SYSTEM GUIDE
+=====================================================================
+
+The Cafeana Analytics Suite is an end-to-end operational intelligence
+engine built specifically for specialty cafes. It is divided into four
+analytical pillars:
+
+  1. Descriptive Analytics : What happened? (Historical sales, KPIs)
+  2. Predictive Analytics  : What will happen? (AI time-series forecasts)
+  3. Operational Simulation: How will operations flow? (Queues & Cash)
+  4. Prescriptive Analytics: What should staff do? (Actionable advice)
+
+All calculations live inside:
+  mobile_web_app/lib/core/analytics/analytics_engine.dart
+(2,386 lines of pure Dart code with zero external UI dependencies).
+Because it is pure Dart, the exact same mathematical logic feeds both
+the live on-screen charts and the downloadable Excel (.xlsx) workbooks!
+
+
+---------------------------------------------------------------------
+ 1. SYSTEM ARCHITECTURE & TRAINING WINDOW LOGIC
+---------------------------------------------------------------------
+
+* Time Filtering:
+  The owner can select any preset time window:
+  Today, Yesterday, Last 7 Days, This Week, This Month, Last 30 Days,
+  Last 90 Days, This Year, All Time, or a Custom Date Range.
+
+* Model Training Window:
+  Machine learning time-series models need sufficient historical data to
+  uncover cyclical weekly patterns.
+    - Minimum training days required (kMinTrainingDays): 14 days
+    - Fallback training days (kFallbackTrainingDays): 28 days
+    - Maximum training days (kMaxTrainingDays): 365 days
+  If the owner selects a short window (e.g., "Today" or "Yesterday"),
+  descriptive stats show only today, while the predictive ML engine
+  automatically widens its training window to the preceding 28 days
+  ending on that date. This prevents model underfitting.
+
+
+---------------------------------------------------------------------
+ 2. DESCRIPTIVE ANALYTICS ENGINE (WHAT HAPPENED)
+---------------------------------------------------------------------
+
+Descriptive analytics aggregate raw completed order documents from
+Firestore into meaningful cafe business metrics:
+
+* Gross Revenue:
+  The total peso sum of all valid, non-cancelled orders:
+    Gross Revenue = Sum(order.total)
+  where order.total represents the final transaction value.
+
+* Net Deductions & Promo Savings:
+  Calculates the difference between full retail menu price and the
+  actual amount paid after promotional voucher codes.
+
+* Average Order Value (AOV):
+    AOV = Gross Revenue / Completed Orders
+  Measures the average spending per customer visit (typically ₱180-₱220).
+
+* Average Items per Order:
+    Items / Order = Total Drink Units Sold / Total Orders
+  Helps managers see if customers are ordering single drinks or
+  purchasing rounds for groups.
+
+* 24-Hour Peak Distribution:
+  Categorizes orders into 24 one-hour bins (00:00 to 23:00).
+  Identifies key operational shifts:
+    - Morning Caffeine Rush: 7:00 AM - 9:00 AM
+    - Afternoon Study / Chill Spike: 2:00 PM - 5:00 PM
+    - Evening Wind-down: 8:00 PM - 10:00 PM
+
+* 7-Day Weekday Performance:
+  Breaks down sales by day of the week (Monday through Sunday):
+    - Weekday volume vs. Weekend volume
+    - Weekday Average Order Value (AOV per day)
+  Reveals customer behavioral shifts (e.g., single espresso shots on
+  Monday mornings vs. large sweet milk teas and pastries on Saturday).
+
+* Category Revenue Contribution:
+  Calculates the percentage share of gross sales generated by each
+  beverage category:
+    Share (%) = (Category Gross Sales / Store Gross Sales) * 100
+  Highlights revenue drivers (e.g., Espresso vs. Cold Brew vs. Pastries).
+
+* Boston Menu Engineering Ranking:
+  Sorts all menu items by volume, gross revenue, and profitability.
+
+
+---------------------------------------------------------------------
+ 3. PREDICTIVE MACHINE LEARNING ENGINE (WHAT WILL HAPPEN NEXT)
+---------------------------------------------------------------------
+
+Cafeana projects 14 days into the future (kForecastHorizonDays = 14)
+using a Multi-Model Ensemble that blends three distinct algorithms.
+By combining three models, the engine cancels out individual model bias
+and delivers stable, trustworthy predictions.
+
+── MODEL 1: Holt-Winters Triple Exponential Smoothing ────────────────
+Best for: Capturing weekly cyclical waves (Saturday/Sunday surges).
+
+* Mathematical Concept:
+  Decomposes historical sales into three components:
+    1. Level (L_t)     : The baseline sales volume
+    2. Trend (T_t)     : The upward or downward growth rate
+    3. Seasonality (S_t): 7-day cyclical weekly multiplier (L = 7)
+
+* Update Equations:
+    L_t = alpha * (Y_t / S_{t-7}) + (1 - alpha) * (L_{t-1} + T_{t-1})
+    T_t = beta  * (L_t - L_{t-1}) + (1 - beta)  * T_{t-1}
+    S_t = gamma * (Y_t / L_t)     + (1 - gamma) * S_{t-7}
+
+* Grid Search Optimization:
+  The engine runs an automated grid search across candidate parameters:
+    alpha in [0.10, 0.20, 0.35]  (level responsiveness)
+    beta  in [0.05, 0.10]        (trend responsiveness)
+    gamma in [0.10, 0.25]        (seasonality responsiveness)
+  It simulates past predictions and picks the exact parameter combination
+  that minimizes the Sum of Squared Errors (SSE).
+
+── MODEL 2: Ridge Autoregressive Model (AR-7 with L2 Regularization) ──
+Best for: Capturing short-term momentum and moving-average stability.
+
+* Mathematical Concept:
+  Frames time-series prediction as a multi-feature regression model:
+    Y_hat = w0 + w1*(t/100) + w2*sin(w) + w3*cos(w) + w4*Lag1 + w5*Lag7 + w6*MA7
+
+* Features in the Vector:
+    1. Intercept (w0) : Base volume level
+    2. Time Index (w1): Normalized linear drift over time
+    3. Sine & Cosine  : Harmonic Fourier terms mapping 7-day day-of-week
+    4. Lag-1 (w4)     : Sales from yesterday (immediate momentum)
+    5. Lag-7 (w5)     : Sales from the same day last week (weekly memory)
+    6. MA-7 (w6)      : Rolling 7-day moving average (underlying trend)
+
+* L2 Regularization (Ridge Penalty):
+  Solves the normal equation with a shrinkage penalty lambda = 1.0:
+    w = (X^T * X + lambda * I)^(-1) * (X^T * Y)
+  This penalty prevents the model from overfitting or swinging wildly
+  when historical order counts are small or noisy.
+
+── MODEL 3: Seasonal Linear Trend Model ──────────────────────────────
+Best for: Establishing a grounded long-term trajectory.
+
+* Mathematical Concept:
+  1. Computes empirical weekday weights (Monday-Sunday seasonal indices).
+  2. De-seasonalizes the raw data: Y_clean = Y_t / Seasonal[weekday].
+  3. Fits an Ordinary Least Squares (OLS) linear slope:
+       Y_clean = Intercept + Slope * t
+  4. Multiplies the forecast by the target day's weekday index.
+  Acts as an objective baseline that prevents exponential runaway.
+
+── DYNAMIC ENSEMBLE BLENDING (Inverse-RMSE Weighting) ────────────────
+Instead of arbitrarily picking one model, Cafeana dynamically evaluates
+how well each model performed on historical backtesting:
+
+  1. Computes Root Mean Squared Error (RMSE) for each model:
+       RMSE = sqrt( (1/N) * Sum( (Y_actual - Y_fitted)^2 ) )
+
+  2. Calculates inverse-error weights:
+       w_HW    = (1 / RMSE_HW)    / Sum(1 / RMSE_all)
+       w_Ridge = (1 / RMSE_Ridge) / Sum(1 / RMSE_all)
+       w_SL    = (1 / RMSE_SL)    / Sum(1 / RMSE_all)
+
+  3. Blends their 14-day forward predictions:
+       Y_ensemble = w_HW * Y_HW + w_Ridge * Y_Ridge + w_SL * Y_SL
+
+If one model experiences high error on a recent pattern, its weight
+automatically shrinks, letting the more accurate models lead.
+
+── FORECAST ACCURACY METRIC: (1 - WAPE) ──────────────────────────────
+Traditional MAPE (Mean Absolute Percentage Error) divides by actual sales:
+  |Y - Y_hat| / Y
+On quiet days with 0 or 1 orders, MAPE divides by near-zero and distorts
+accuracy. Cafeana uses Weighted Absolute Percentage Error (WAPE):
+
+    WAPE = Sum( |Y_actual - Y_predicted| ) / Sum( Y_actual )
+    Model Accuracy = (1 - WAPE) * 100%
+
+A model with 88% accuracy means total prediction deviation across the
+entire validation window was only 12%.
+
+── DYNAMIC UNCERTAINTY BANDS (P10 Downside vs. P90 Upside) ───────────
+Every forecast includes dynamic confidence envelopes based on residual
+standard error (resStd):
+
+* 14-Day Horizon Scaling:
+  Uncertainty naturally increases the further we look into the future:
+    Band Margin = 1.28 * resStd * sqrt( 1.0 + 0.04 * dayStep )
+
+* P10 Forecast ("Rainy Day" / Downside Scenario):
+    P10 = max(0, Forecast - Band Margin)
+  There is a 90% statistical probability that sales will exceed this
+  floor. Use this number for worst-case cash budgeting.
+
+* P90 Forecast ("Rush Surge" / Upside Scenario):
+    P90 = Forecast + Band Margin
+  Represents peak weekend or event demand. Use this to ensure the cafe
+  never runs out of milk, ice, or cups during unexpected surges.
+
+── DIFFERENTIATED FORECAST VISUALIZATIONS ────────────────────────────
+On the Analytics screen, the two predictive charts serve distinct roles:
+
+  * Chart 1: 14-Day Cumulative Revenue Pace
+    Plots the running cumulative total of predicted sales against the
+    previous 14 days' actual running total.
+    Tells the owner: "Are we pacing ahead or behind the past two weeks?"
+
+  * Chart 2: 14-Day Daily Order Volume
+    Plots the daily predicted drink count with shaded P10-P90 confidence
+    bands.
+    Tells the baristas: "How many drinks should we expect to brew each day?"
+
+
+---------------------------------------------------------------------
+ 4. OPERATIONAL SIMULATIONS (QUEUES & CASH FLOW)
+---------------------------------------------------------------------
+
+── CUSTOMER QUEUE FLOW SIMULATION ───────────────────────────────────
+Predicts hourly customer congestion for tomorrow using queueing theory:
+
+* Parameters:
+    - Hourly Arrival Rate (lambda): Expected orders arriving that hour
+    - Service Rate (mu)          : 12 orders / barista / hour
+    - Barista Capacity (C)       : Active Baristas * 12
+    - Traffic Intensity (rho)    : lambda / C
+
+* Wait Time Simulation:
+    - Quiet    (lambda = 0) : 0 min wait
+    - Optimal  (rho < 0.60) : 2 - 3 min wait
+    - Steady   (rho < 0.85) : 4 - 7 min wait
+    - Rush     (rho < 1.00) : 8 - 14 min wait (peak queue)
+    - Congested(rho >= 1.00): 15 - 30+ min wait (queue overflow)
+
+* Recommended Staffing:
+  Automatically recommends the exact number of active baristas needed
+  for each hour of the day so wait times stay under 5 minutes.
+
+── 14-DAY CASH FLOW SCENARIOS ───────────────────────────────────────
+Aggregates daily revenue predictions into executive financial insights:
+  - Expected 14-Day Revenue: Baseline target
+  - P10 Downside Safety Net: Minimum guaranteed cash floor
+  - P90 Upside Potential   : Ceiling under high customer turnout
+  - Daily Run Rate         : Expected 14-Day Revenue / 14
+  - Weekend Surge Rate (%) : Percentage increase of Saturday/Sunday sales
+                             compared to standard Monday-Friday averages.
+
+── 6-MONTH ROLLING FINANCIAL PROJECTION ─────────────────────────────
+Projects store revenue across a half-year horizon:
+  - 5 Historical Months: Verified actual earnings
+  - Current Month      : Actual sales to date + projected sales for
+                         remaining days in the month
+  - Next Month         : Forward ML forecast based on seasonal trends
+
+
+---------------------------------------------------------------------
+ 5. PRESCRIPTIVE ANALYTICS ENGINE (WHAT STAFF SHOULD DO)
+---------------------------------------------------------------------
+
+Prescriptive analytics translates raw numbers into specific daily tasks:
+
+── INVENTORY RESTOCK OPTIMIZATION ───────────────────────────────────
+Prevents both stockouts (running out of milk) and waste (spoilage).
+
+* Calculation:
+  1. Evaluates past sales velocity for each menu item.
+  2. Maps menu items to required ingredients via product recipes.
+  3. Forecasts 7-day future ingredient demand:
+       7-Day Demand = Daily Rate * Growth Factor * 7 days
+  4. Applies a 1.2x - 1.3x Safety Stock buffer:
+       Target Stock = ceil( 7-Day Demand * 1.3 )
+  5. Computes exact reorder quantity:
+       Reorder Units = max(0, Target Stock - Current Stock)
+
+* Restock Status Flags:
+  - Critical : Stock is at 0 or will run out in < 24 hours (Reorder NOW)
+  - Low Stock: Stock will run out within 1 to 3 days
+  - Healthy  : Adequate stock cover for the upcoming 7 days
+
+── PRODUCT MOMENTUM TRACKING ────────────────────────────────────────
+Splits the selected time window in half (First Half vs. Second Half)
+and measures the sales velocity change:
+
+    Growth (%) = (Second Half Units - First Half Units) / First Half Units
+
+  * Rising Stars  (Growth > +15%):
+    Beverages rapidly gaining traction among customers.
+    Action: Feature prominently on the landing page and social media.
+
+  * Declining Items (Growth < -15%):
+    Beverages losing popularity.
+    Action: Review taste profile, adjust pricing, or bundle with snacks.
+
+── BOSTON MENU ENGINEERING MATRIX ───────────────────────────────────
+Categorizes every menu item into four quadrants based on:
+  - Popularity Threshold   : 70% of average item sales volume
+  - Profitability Threshold: Store-wide average price per unit
+
+  1. STARS (High Volume, High Price):
+     Your best-sellers and profit drivers.
+     Action: Maintain high quality and recipe consistency.
+
+  2. PLOWHORSES (High Volume, Low Price):
+     Popular customer staples that yield smaller profit margins.
+     Action: Consider a slight price adjustment (+₱5-₱10) or pair
+     with premium add-ons (extra espresso shot, syrup pumps).
+
+  3. PUZZLES (Low Volume, High Price):
+     High-margin gourmet drinks that don't sell frequently enough.
+     Action: Reposition on menu boards; instruct baristas to verbally
+     recommend them.
+
+  4. DOGS (Low Volume, Low Price):
+     Low demand and low profitability.
+     Action: Consider replacing them with seasonal specials.
+
+── CUSTOMER RFM SEGMENTATION & CHURN PREVENTATIVE FLOW ──────────────
+Analyzes customer purchasing history along two core behavioral axes:
+  - Recency (R)  : Days elapsed since their most recent order
+  - Frequency (F): Total number of orders placed in store history
+
+Customers are sorted into five strategic cohorts:
+
+  1. Champions (VIP Regulars):
+     Frequency >= 4 orders AND Recency <= 7 days.
+     The cafe's most passionate advocates.
+     Action: Offer secret menu tastings and personalized perks.
+
+  2. Loyal Patrons:
+     Frequency >= 3 orders AND Recency <= 14 days.
+     Steady weekly regulars.
+     Action: Loyalty rewards and milestone discounts.
+
+  3. Promising High-Value:
+     Frequency <= 2 orders, Recency <= 10 days, Spend >= ₱300.
+     New customers who placed large, expensive orders.
+     Action: Welcome-back voucher to convert them into regulars.
+
+  4. At-Risk (Churn Warning):
+     Frequency >= 2 orders, but Recency between 15 and 30 days.
+     Past regulars whose visit pattern has suddenly stopped.
+     Action: Send automated re-engagement offer: "We miss you! 20% off".
+
+  5. Occasional / Inactive:
+     Recency > 30 days or one-time walk-ins.
+     Action: Promote new seasonal beverage launches.
+
+* Customer Retention Rate:
+    Retention Rate (%) = (Repeat Customers / Total Customers) * 100
+  Tracks how successfully the cafe turns first-time visitors into repeat
+  regular customers.
+
+── SMART PRODUCT BUNDLING (Market Basket Analysis) ──────────────────
+Scans all multi-item orders in the database to identify products
+frequently purchased together in the same basket (e.g., Iced Caramel
+Macchiato + Almond Croissant).
+
+  - Calculates co-occurrence frequency across all multi-item receipts.
+  - Automatically suggests combo deals with an attractive 10% discount:
+      Combo Price = (Price A + Price B) * 0.90
+  - Encourages customers to add food to beverage orders, raising AOV.
+
+
+---------------------------------------------------------------------
+ 6. PLAIN-ENGLISH OWNER & BARISTA FIELD GUIDE
+---------------------------------------------------------------------
+
+How to use this dashboard in daily cafe operations:
+
+* EVERY MORNING (Opening Shift - 8:30 AM):
+  1. Open Staff Dashboard -> "Analytics".
+  2. Check "Tomorrow's Queue Flow": See what time the rush will hit today.
+  3. Check "Restock Recommendations": Any ingredient with a red "Critical"
+     badge must be restocked before opening the doors.
+
+* EVERY MONDAY (Weekly Planning):
+  1. Set Date Filter to "Last 7 Days".
+  2. Review "14-Day Revenue Pace": Are sales tracking higher than last week?
+  3. Review "Staffing Plan": Schedule extra baristas on peak days (e.g. Saturday).
+  4. Export Excel Report: Tap "Export Excel (.xlsx)" in the top-right
+     corner to save a permanent, cleanly-formatted business record.
+
+* EVERY MONTH (Inventory & Strategy):
+  1. Review the "Menu Engineering Matrix": Keep Stars, re-price Plowhorses,
+     promote Puzzles, and retire Dogs.
+  2. Check "Customer Retention Rate": Aim to keep retention above 45%.
+  3. Check "At-Risk Customers": If at-risk count is rising, launch a weekend
+     promo code to re-engage past patrons.
+
 
