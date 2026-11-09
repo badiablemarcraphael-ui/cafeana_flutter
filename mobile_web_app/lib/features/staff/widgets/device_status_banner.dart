@@ -13,7 +13,7 @@ class DeviceStatusBanner extends ConsumerWidget {
       data: (status) {
         if (status == null) return const SizedBox.shrink();
 
-        final isOnline = status['status'] == 'online';
+        final isOnline = (status['online'] == true) || (status['status'] == 'online');
         if (isOnline) return const SizedBox.shrink();
 
         return Material(

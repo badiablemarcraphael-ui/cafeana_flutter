@@ -1,0 +1,357 @@
+=====================================================================
+                 CAFEANA PROJECT GUIDE - WHAT IS WHAT
+=====================================================================
+
+Cafeana is a full cafe ordering and management system made of 3 parts:
+
+  1. A Flutter app (mobile + web)  -> customers order, staff manage the cafe
+  2. Firebase (cloud backend)      -> login, database, push notifications
+  3. ESP32 kitchen terminal        -> small device in the kitchen with an
+                                      OLED screen + buzzer that alerts staff
+                                      when a new order arrives
+
+HOW AN ORDER FLOWS
+  Customer places order (app)
+     -> saved in Firestore "orders" collection with status "queued"
+     -> Staff dashboard sees it instantly + ESP32 buzzes in the kitchen
+     -> Staff taps "Start Preparing" -> status "preparing"
+     -> Staff taps "Mark as Ready"   -> status "ready" (customer is notified)
+     -> Staff taps "Complete"        -> status "completed" (goes to analytics)
+
+USER ROLES (stored in Firestore users/{uid}.role)
+  customer -> customer app (/customer/...)
+  owner    -> full staff dashboard (every page)
+  cashier  -> staff dashboard (Home, Queue, Feed, Menu, Inventory)
+  kitchen  -> order queue only (no side navigation)
+
+
+=====================================================================
+ ROOT FOLDER  (cafeana_flutter/)
+=====================================================================
+
+mobile_web_app/          The main Flutter app (MOST of your code is here)
+firmware/                ESP32 kitchen terminal code (C++ / PlatformIO)
+esp32_cafe_alert/        Empty folder (leftover, not used)
+docs/                    Technical documentation (markdown files)
+.vscode/                 VS Code settings (C++ IntelliSense for firmware)
+.venv/                   Python virtual environment (ignored by git, not
+                         needed by the app)
+
+CAFEANA_SYSTEM_GUIDE.md  Explains the architecture and order flow + how
+                         to test customer and staff at the same time
+walkthrough.md           End-to-end manual testing checklist
+PROJECT_GUIDE.txt        This file
+users.txt                List of test/seed login accounts
+asd.txt                  Personal scratch note (email addresses)
+.gitignore               Tells git which files NOT to upload
+.clangd /
+compile_commands.json    C++ editor helper files for the firmware
+desktop.ini              Windows/OneDrive system file (ignore)
+
+
+=====================================================================
+ docs/  (documentation only, no running code)
+=====================================================================
+
+README.md                         Project overview + quick start commands
+architecture.md                   System diagram, app layers, routing
+data-model.md                     Firestore collections and their fields
+api-contract.md                   REST calls the ESP32 uses to talk to
+                                  Firestore
+firebase_setup.md                 How to set up the Firebase project
+free-spark-plan-notifications.md  How push notifications work on the FREE
+                                  Firebase plan (no paid Blaze plan)
+
+
+=====================================================================
+ firmware/  (ESP32 Kitchen Terminal)
+=====================================================================
+
+platformio.ini           Build settings (board, libraries) for PlatformIO
+src/main.cpp             The whole device program: connects to Wi-Fi,
+                         checks Firestore for "queued" orders, shows the
+                         order number on the OLED, sounds the buzzer,
+                         button to acknowledge. Has a MOCK_MODE for demo.
+src/secrets.h            Wi-Fi / Firebase / device login credentials
+wokwi/diagram.json       Virtual wiring for the Wokwi online simulator
+wokwi/wokwi.toml         Wokwi simulator config
+_clangd_probe/           Tiny test files for the C++ editor (ignore)
+README.md                How to build and flash the ESP32
+
+Pins: OLED SDA=21, SCL=22, Button=18, LED=5, Onboard LED=2
+
+
+=====================================================================
+ mobile_web_app/  (Flutter app) - TOP LEVEL FILES
+=====================================================================
+
+pubspec.yaml             List of Flutter packages + assets the app uses
+pubspec.lock             Exact package versions (auto-generated)
+analysis_options.yaml    Code style / lint rules
+README.md                Basic info about the app
+
+firebase.json            Firebase deploy config (hosting, rules, functions)
+.firebaserc              Which Firebase project to deploy to
+firestore.rules          DATABASE SECURITY RULES - who can read/write
+                         each collection (users, orders, products, ...)
+firestore.indexes.json   Database indexes needed for sorted queries
+
+functions/               Node.js backend code for notifications:
+  index.js                 Cloud Functions (onOrderCreated / onOrderUpdated)
+                           - send push notifications when order status
+                           changes (needs paid Blaze plan)
+  dispatcher.js            FREE alternative: run "node dispatcher.js" on any
+                           PC; it watches orders and sends push
+                           notifications without Cloud Functions
+  package.json             Node packages for the functions
+
+package.json /
+package-lock.json        Node package (firebase-admin) for helper scripts
+auth.json                Saved login token (helper/testing file)
+
+check_google*.dart,
+check_methods.dart       Small throwaway tests for Google Sign-In (safe to
+                         delete)
+test_firestore.dart      Throwaway script to test Firestore login/query
+test_nav.dart            Throwaway test of a navigation bar layout
+
+assets/images/           Logo and drink pictures shown in the menu
+  drinks/                  One PNG per drink (file name = product name)
+
+android/                 Android-specific project (app icon, permissions,
+                         google-services.json)
+web/                     Web-specific files:
+  index.html               The page that loads the Flutter web app
+  manifest.json            PWA info (name, icon, colors)
+  firebase-messaging-sw.js Service worker for web push notifications
+  favicon.png              Browser tab icon
+
+test/                    Automated tests
+  widget_test.dart         Basic app smoke test
+  analytics_ml_csv_test.dart Tests for analytics + CSV export
+
+AUTO-GENERATED (do not edit, safe to ignore):
+  build/, .dart_tool/, node_modules/, .idea/, .firebase/, .metadata,
+  .flutter-plugins-dependencies, cafeana_app.iml
+
+
+=====================================================================
+ mobile_web_app/lib/  (THE ACTUAL APP CODE)
+=====================================================================
+
+main.dart                App starting point. Starts Firebase, notifications,
+                         sets up the error screen, then runs the app.
+firebase_options.dart    Firebase project keys (auto-generated by
+                         FlutterFire CLI)
+
+---------------------------------------------------------------------
+ lib/app/   (app setup)
+---------------------------------------------------------------------
+app.dart                 Root widget (CafeanaApp): theme + router
+router.dart              ALL PAGE ROUTES/URLs and login redirects.
+                         Decides where a user goes based on role.
+                         Routes:
+                           /                 landing page (public)
+                           /login            login / register
+                           /verify-email     email verification
+                           /customer/home, /menu, /cart, /orders,
+                             /profile, /checkout, /community-feedback
+                           /staff/home, /orders, /feed, /menu,
+                             /inventory, /analytics, /feedback, /users,
+                             /transactions, /promotions, /devices, /logs
+
+---------------------------------------------------------------------
+ lib/core/   (shared code used everywhere)
+---------------------------------------------------------------------
+constants.dart           App-wide constants (e.g. low-stock threshold)
+
+core/models/  -> DATA SHAPES (what a record looks like in the database)
+  order.dart               An order: items, total, status (queued /
+                           preparing / ready / completed / cancelled),
+                           payment status, order type
+  product.dart             A menu item: name, price, category, sizes
+                           (Small/Large), image, availability
+  cart_item.dart           One item in the shopping cart (memory only)
+  ingredient.dart          Inventory ingredient + recipe + add-ons
+  inventory_log.dart       Record of each stock change
+  promotion.dart           Discount/promo codes (percent or fixed)
+  feedback_model.dart      Customer rating + comment (1 per order)
+  user_profile.dart        User info + role (customer/owner/cashier/
+                           kitchen)
+  activity_log.dart        Staff activity record (see note below)
+
+core/providers/  -> THE "BRAIN" (Riverpod: loads data + business logic)
+  firebase_providers.dart    Firebase Auth/Firestore access, current user,
+                             user profile stream
+  firebase_providers.g.dart  Auto-generated from the file above (do not
+                             edit; regenerate with build_runner)
+  auth_service.dart          Login, register, Google sign-in, logout
+  product_providers.dart     Loads available menu items for customers
+  cart_provider.dart         Shopping cart: add/remove, totals, promo
+                             discount, cart badge count
+  order_providers.dart       Customer orders, order tracking, CHECKOUT
+                             (creates the order), mark paid/completed
+  staff_providers.dart       Staff side: all products, active order queue,
+                             order status changes, inventory adjust,
+                             device status, users, activity logs
+  analytics_providers.dart   Data for the Analytics page (date range,
+                             all orders, report)
+  order_notification_watcher.dart  Watches orders live and pops
+                             notifications when a status changes
+
+core/analytics/
+  analytics_engine.dart      Calculates all analytics: revenue, best
+                             sellers, peak hours, trends, forecasts
+                             (predictions), peso formatting
+
+core/services/  -> NOTIFICATIONS
+  notification_service.dart        Push notifications (Firebase Cloud
+                                   Messaging) for web + mobile
+  web_notification_helper.dart     Picks the right version below
+  web_notification_helper_web.dart Browser notifications (web only)
+  web_notification_helper_stub.dart Empty version for mobile
+
+core/theme/
+  app_theme.dart             Colors, fonts, light/dark theme (espresso +
+                             caramel coffee palette)
+
+core/utils/  -> HELPER TOOLS
+  asset_resolver.dart        Matches a product name to its drink picture
+  dialog_utils.dart          Reusable confirm dialogs + snackbars
+  export_csv_util.dart       Exports analytics / inventory to CSV files
+  profanity_filter.dart      Blocks bad words (English + Tagalog) in
+                             feedback and comments
+  seed_db.dart               Fills the database with starter menu,
+                             ingredients and recipes (run once; not used
+                             by the app normally)
+
+core/widgets/  -> REUSABLE UI PIECES
+  app_background.dart        Warm gradient background used on screens
+  animated_glass_card.dart   Frosted-glass card with tap animation
+  gradient_button.dart       Main coffee-colored gradient button
+  premium_section_header.dart Section title with accent line
+  hero_mesh_header.dart      Big decorative header on home pages
+  cafeana_loading_screen.dart Branded loading screen
+  cafeana_error_recovery_screen.dart Friendly error screen (instead of
+                             a red/blank crash screen)
+  nav_toggle_handle.dart     The small tab that opens/closes the
+                             navigation bars
+  floating_nav_bar.dart      Old floating nav bar (currently NOT used)
+  shimmer_loader.dart        Shimmer loading placeholder (currently NOT
+                             used)
+
+---------------------------------------------------------------------
+ lib/features/   (the screens, grouped by who uses them)
+---------------------------------------------------------------------
+
+features/public/pages/
+  landing_page.dart          Public homepage before login: menu preview,
+                             About Us, Contact Us footer (phone, email,
+                             address, opening hours)
+
+features/auth/presentation/
+  login_page.dart            Login + Register tabs, forgot password,
+                             Google sign-in
+  verify_email_page.dart     "Please verify your email" screen
+
+features/customer/  (CUSTOMER APP)
+  shell/customer_shell.dart  Bottom navigation bar (Home, Menu, Cart,
+                             Orders, Profile) with open/close handle
+  pages/
+    customer_home_page.dart    Home: active order card, promos, shortcuts,
+                               shop location
+    customer_menu_page.dart    Full menu grouped by category
+    cart_page.dart             Shopping cart (change qty, remove)
+    checkout_page.dart         Order summary, promo, place the order
+    order_tracking_page.dart   Live order status (queued -> ready)
+    order_history_page.dart    List of past orders
+    feedback_page.dart         Rate an order (stars + comment)
+    community_feedback_page.dart See other customers' reviews
+    profile_page.dart          Edit name/email/phone, sign out
+  widgets/
+    product_card.dart          A drink card on the menu
+    product_details_modal.dart Pop-up to choose size, sugar, ice, add-ons
+    location_map_card.dart     Shop address card + "Directions" button
+                               (opens Google Maps)
+    order_status_stepper.dart  Status timeline (currently NOT used)
+
+features/staff/  (STAFF / OWNER DASHBOARD)
+  shell/staff_shell.dart     Left side navigation rail (pages shown
+                             depend on role) with open/close handle
+  pages/
+    staff_home_page.dart       Dashboard: today's stats + shortcuts
+    staff_orders_page.dart     "Queue" - active orders; change status
+                               (prepare / ready / complete / cancel)
+    staff_order_feed_page.dart "Feed" - read-only history of all orders
+    staff_menu_page.dart       Add / edit / hide menu products
+    staff_inventory_page.dart  Ingredients stock, restock, recipes,
+                               how many drinks can still be made
+    staff_analytics_page.dart  Charts, sales reports, forecasts, CSV
+                               export (owner only)
+    staff_feedback_page.dart   Read and reply to customer feedback
+    staff_users_page.dart      Manage users and change roles
+    staff_transactions_page.dart "Sales" - all transactions / payments
+    staff_promotions_page.dart Create and manage promos
+    staff_device_monitoring_page.dart Status of the ESP32 kitchen device
+    staff_activity_logs_page.dart "Logs" - who did what and when
+  widgets/
+    analytics_charts.dart      Line and bar chart widgets for analytics
+    device_status_banner.dart  Warning banner when the ESP32 is offline
+
+---------------------------------------------------------------------
+ lib/models/
+---------------------------------------------------------------------
+activity_log.dart          Activity log model. NOTE: there is a duplicate
+                           copy in core/models/activity_log.dart. The app
+                           uses THIS one (lib/models/); the core/models
+                           copy is unused.
+
+
+=====================================================================
+ FIRESTORE DATABASE COLLECTIONS (from firestore.rules)
+=====================================================================
+users          user profiles + roles
+products       menu items
+ingredients    inventory stock
+addOns         extra add-ons (e.g. extra shot)
+orders         all orders
+counters       running order number (#1001, #1002, ...)
+feedback       customer ratings (1 per order)
+promotions     discount codes
+inventoryLog   stock change history
+activityLogs   staff action history
+deviceStatus   ESP32 online/offline heartbeat
+
+
+=====================================================================
+ COMMON COMMANDS
+=====================================================================
+cd mobile_web_app
+flutter pub get                         install packages
+flutter run -d chrome                   run as website
+flutter run -d web-server --web-port 8080   run local web server
+flutter build web                       build website for hosting
+firebase deploy --only hosting          upload website to Firebase
+firebase deploy --only firestore:rules  upload database rules
+flutter analyze                         check code for problems
+flutter test                            run automated tests
+
+cd mobile_web_app/functions
+node dispatcher.js                      free push-notification sender
+
+cd firmware
+pio run --target upload                 flash code to the ESP32
+
+
+=====================================================================
+ SECURITY NOTES (please read)
+=====================================================================
+These files contain private info and are currently uploaded to git:
+  - firmware/src/secrets.h        (Firebase API key + device email &
+                                   password)
+  - mobile_web_app/auth.json      (login token)
+  - users.txt / asd.txt           (account emails)
+If your GitHub repo is public, consider removing them from git
+(git rm --cached <file>), adding them to .gitignore, and changing the
+device password.
+

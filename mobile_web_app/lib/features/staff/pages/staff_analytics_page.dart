@@ -1313,7 +1313,6 @@ class _PredictiveView extends StatelessWidget {
     final histOffset = histLen - showHistCount;
 
     final dispHistDates = report.revenue.historyDates.sublist(histOffset);
-    final dispRevHist = report.revenue.history.sublist(histOffset);
     final dispOrderHist = report.orders.history.sublist(histOffset);
 
     final pDateLabels = [
@@ -1325,29 +1324,31 @@ class _PredictiveView extends StatelessWidget {
       ...report.revenue.forecastDates.map((d) => DateFormat('EEE, MMM d').format(d)),
     ];
 
-    // rHist spans only the actual historical points
-    final rHist = [
-      ...dispRevHist,
-      ...List<double?>.filled(report.revenue.forecast.length, null),
-    ];
+    // ── Revenue: cumulative 14-day sales pace (a different analysis from the
+    // daily order-volume chart, which would otherwise mirror its shape since
+    // revenue ≈ orders × average order value).
+    final horizon = report.revenue.forecast.length;
+    final revLabels = [for (var i = 0; i < horizon; i++) 'Day ${i + 1}'];
+    final revFullLabels = report.revenue.forecastDates.map((d) => DateFormat('EEE, MMM d').format(d)).toList();
 
-    // Anchor forecast line and confidence bands to the last actual point to eliminate line breaks!
-    final lastRevVal = dispRevHist.isNotEmpty ? dispRevHist.last : (report.revenue.forecast.isNotEmpty ? report.revenue.forecast.first : 0.0);
-    final rFore = [
-      ...List<double?>.filled(math.max(0, dispRevHist.length - 1), null),
-      if (dispRevHist.isNotEmpty) lastRevVal,
-      ...report.revenue.forecast,
+    List<double> cumulative(List<double> xs) {
+      var run = 0.0;
+      return [for (final x in xs) run += x];
+    }
+
+    final rCumFore = cumulative(report.revenue.forecast);
+    final rCumLow = cumulative(report.revenue.p10Forecast);
+    final rCumHigh = cumulative(report.revenue.p90Forecast);
+    // Previous period (same number of days immediately before tomorrow).
+    final prevRev = report.revenue.history.length >= horizon
+        ? report.revenue.history.sublist(report.revenue.history.length - horizon)
+        : report.revenue.history;
+    final rCumPrev = <double?>[
+      ...cumulative(prevRev),
+      ...List<double?>.filled(math.max(0, horizon - prevRev.length), null),
     ];
-    final rLow = [
-      ...List<double?>.filled(math.max(0, dispRevHist.length - 1), null),
-      if (dispRevHist.isNotEmpty) lastRevVal,
-      ...report.revenue.p10Forecast,
-    ];
-    final rHigh = [
-      ...List<double?>.filled(math.max(0, dispRevHist.length - 1), null),
-      if (dispRevHist.isNotEmpty) lastRevVal,
-      ...report.revenue.p90Forecast,
-    ];
+    final prevTotal = prevRev.fold<double>(0, (a, b) => a + b);
+    final paceChange = prevTotal > 0 ? (report.revenue.forecastTotal - prevTotal) / prevTotal * 100 : null;
 
     // oHist spans actual order history
     final oHist = [
@@ -1592,31 +1593,32 @@ class _PredictiveView extends StatelessWidget {
       ),
       const SizedBox(height: 16),
 
-      // Revenue Forecast
+      // Revenue Forecast — cumulative sales pace vs previous period
       AnalyticsChartCard(
         index: 'P1',
         title: 'Revenue Forecast (Next $kForecastHorizonDays Days)',
-        subtitle: 'AI financial forecast • Trained on historical AOV & weekly surge patterns',
+        subtitle: 'Cumulative sales pace • Projected running total vs the previous $kForecastHorizonDays days',
         headline: formatPeso(report.revenue.forecastTotal),
         height: 260,
         legend: [
-          LegendEntry('Actual Revenue', kChartPalette[0]),
-          const LegendEntry('Ensemble Forecast', kForecast, dashed: true),
+          const LegendEntry('Projected (running total)', kForecast, dashed: true),
+          LegendEntry('Previous $kForecastHorizonDays days', kChartPalette[0]),
         ],
         insights: [
-          'Forecast avg: ${formatPeso(report.revenue.forecastAvg)}/day',
-          'Model accuracy: ${(report.revenue.model.accuracy * 100).toStringAsFixed(1)}%',
-          'Pessimistic - Optimistic range: ${formatPeso(report.revenue.p10Total / kForecastHorizonDays)} - ${formatPeso(report.revenue.p90Total / kForecastHorizonDays)}/day',
+          if (paceChange != null)
+            '${paceChange >= 0 ? 'Ahead of' : 'Behind'} previous period by ${paceChange.abs().toStringAsFixed(1)}% (${formatPeso(prevTotal)} last $kForecastHorizonDays days)',
+          'Forecast avg: ${formatPeso(report.revenue.forecastAvg)}/day • Model accuracy: ${(report.revenue.model.accuracy * 100).toStringAsFixed(1)}%',
+          'Pessimistic - Optimistic $kForecastHorizonDays-day total: ${formatPeso(report.revenue.p10Total)} - ${formatPeso(report.revenue.p90Total)}',
         ],
         child: TrendLineChart(
-          labels: pDateLabels,
-          tooltipLabels: pDateFullLabels,
+          labels: revLabels,
+          tooltipLabels: revFullLabels,
           series: [
-            LineSeries('Actual', rHist, kChartPalette[0]),
-            LineSeries('Forecast', rFore, kForecast, dashed: true),
+            LineSeries('Previous period', rCumPrev, kChartPalette[0]),
+            LineSeries('Projected', rCumFore, kForecast, dashed: true),
           ],
-          bandLower: rLow,
-          bandUpper: rHigh,
+          bandLower: rCumLow,
+          bandUpper: rCumHigh,
           bandColor: kForecast,
           axisFmt: formatPesoCompact,
           tooltipFmt: formatPeso,

@@ -131,10 +131,63 @@ class _OrderDetailState extends ConsumerState<_OrderDetail> {
                   ],
                 ),
               ),
-              _PaymentChip(status: order.paymentStatus),
+              _PaymentChip(
+                status: order.paymentStatus,
+                onTap: order.paymentStatus == PaymentStatus.pending
+                    ? () => _showPaymentQRDialog(context)
+                    : null,
+              ),
             ],
           ),
         ).animate().fadeIn().slideY(begin: 0.06, end: 0),
+
+        if (order.paymentStatus == PaymentStatus.pending) ...[
+          const SizedBox(height: 12),
+          AnimatedGlassCard(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            accentColor: Colors.orange,
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.qr_code_2_rounded,
+                      color: Colors.orange, size: 22),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Payment Pending',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                      Text(
+                        'Scan QR code to pay via e-wallet',
+                        style: TextStyle(
+                            color: cs.onSurfaceVariant, fontSize: 11),
+                      ),
+                    ],
+                  ),
+                ),
+                FilledButton.tonalIcon(
+                  onPressed: () => _showPaymentQRDialog(context),
+                  icon: const Icon(Icons.qr_code_rounded, size: 16),
+                  label: const Text('Pay with QR'),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 8),
+                  ),
+                ),
+              ],
+            ),
+          ).animate().fadeIn(delay: 150.ms),
+        ],
 
         // ── Push / Taskbar Notification prompt & test ─────────────────────────
         _OrderNotificationBanner(orderNumber: order.orderNumber),
@@ -331,6 +384,61 @@ class _OrderDetailState extends ConsumerState<_OrderDetail> {
     return '${months[dt.month - 1]} ${dt.day}, ${dt.year}  '
         '${dt.hour.toString().padLeft(2, '0')}:'
         '${dt.minute.toString().padLeft(2, '0')}';
+  }
+
+  void _showPaymentQRDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Payment QR Code'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Scan this QR code using your e-wallet to complete payment:'),
+            const SizedBox(height: 16),
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.grey.shade300),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.08),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              padding: const EdgeInsets.all(12),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.asset(
+                  'assets/images/qr.jpg',
+                  width: 240,
+                  height: 240,
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) => Container(
+                    width: 200,
+                    height: 200,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.qr_code_2, size: 150, color: Colors.blueAccent),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -578,13 +686,14 @@ class _PremiumStatusStepper extends StatelessWidget {
 // ── Payment chip ──────────────────────────────────────────────────────────────
 
 class _PaymentChip extends StatelessWidget {
-  const _PaymentChip({required this.status});
+  const _PaymentChip({required this.status, this.onTap});
   final PaymentStatus status;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final isPaid = status == PaymentStatus.paid;
-    return Container(
+    final chip = Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
         color: isPaid
@@ -596,13 +705,13 @@ class _PaymentChip extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
-            isPaid ? Icons.check_circle_rounded : Icons.schedule_rounded,
-            size: 12,
+            isPaid ? Icons.check_circle_rounded : Icons.qr_code_2_rounded,
+            size: 13,
             color: isPaid ? Colors.green.shade700 : Colors.orange.shade700,
           ),
           const SizedBox(width: 4),
           Text(
-            isPaid ? 'Paid' : 'Pending',
+            isPaid ? 'Paid' : 'Pending (Pay QR)',
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w700,
@@ -612,6 +721,15 @@ class _PaymentChip extends StatelessWidget {
         ],
       ),
     );
+
+    if (onTap != null) {
+      return InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: chip,
+      );
+    }
+    return chip;
   }
 }
 

@@ -1,3 +1,4 @@
+import 'package:excel/excel.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:cafeana_app/core/analytics/analytics_engine.dart';
 import 'package:cafeana_app/core/models/order.dart';
@@ -105,14 +106,22 @@ void main() {
       expect(csv, contains('### P6. CUSTOMER QUEUE FLOW SIMULATION'));
       expect(csv, contains('### R7. CUSTOMER RFM SEGMENTATION'));
 
-      // Verify table column alignment
+      // Verify table structure: clean CSV cells (no padding spaces)
       final lines = csv.split('\n');
       final p1Header = lines.firstWhere((l) => l.contains('Model Name'));
       final p1FirstRow = lines[lines.indexOf(p1Header) + 1];
+      expect(p1Header.contains(','), isTrue);
+      expect(p1Header.contains(', '), isFalse);
+      expect(p1FirstRow.split(',').length, greaterThan(1));
 
-      // Columns should be aligned with comma-space delimiter
-      expect(p1Header.contains(', '), isTrue);
-      expect(p1FirstRow.contains(', '), isTrue);
+      // Excel export: real .xlsx workbook with auto-sized columns
+      final xlsx = ExportCsvUtil.buildAnalyticsXlsx(report, AnalyticsExportSection.full);
+      expect(xlsx.length, greaterThan(100));
+      final book = Excel.decodeBytes(xlsx);
+      final sheet = book.tables['Report']!;
+      expect(sheet.maxRows, greaterThan(10));
+      final colA = sheet.getColumnWidth(0);
+      expect(colA, greaterThan(8.0));
     });
   });
 }

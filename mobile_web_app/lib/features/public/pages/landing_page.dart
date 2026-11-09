@@ -398,7 +398,7 @@ class _LandingPageState extends ConsumerState<LandingPage> {
                           ),
                           const SizedBox(height: 16),
                           Text(
-                            'The perfect brew\nfor a perfect day.',
+                            'To infinity and beyond\nbetter café!',
                             style: TextStyle(
                               color: Colors.black87,
                               fontSize: 16,
@@ -419,11 +419,11 @@ class _LandingPageState extends ConsumerState<LandingPage> {
                             ),
                           ),
                           const SizedBox(height: 16),
-                          _ContactRow(icon: Icons.location_on, text: '123 Coffee Street, Beansville, CA 90210'),
+                          _ContactRow(icon: Icons.location_on, text: 'Bonifacio St. Brgy. San Agustin, Bay, Laguna'),
                           const SizedBox(height: 12),
-                          _ContactRow(icon: Icons.phone, text: '+1 (555) 123-4567'),
+                          _ContactRow(icon: Icons.phone, text: '09628769611'),
                           const SizedBox(height: 12),
-                          _ContactRow(icon: Icons.email, text: 'hello@cafeana.com'),
+                          _ContactRow(icon: Icons.email, text: 'cafeana@gmail.com'),
                         ],
                       ),
                       // Hours Column
@@ -439,9 +439,7 @@ class _LandingPageState extends ConsumerState<LandingPage> {
                             ),
                           ),
                           const SizedBox(height: 16),
-                          Text('Mon - Fri: 7:00 AM - 8:00 PM', style: TextStyle(color: Colors.black87)),
-                          const SizedBox(height: 8),
-                          Text('Sat - Sun: 8:00 AM - 9:00 PM', style: TextStyle(color: Colors.black87)),
+                          Text('9:00AM to 1:00AM daily', style: TextStyle(color: Colors.black87)),
                         ],
                       ),
                     ],
@@ -478,10 +476,13 @@ class _ContactRow extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return Row(
       mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Icon(icon, size: 20, color: cs.primary),
         const SizedBox(width: 12),
-        Text(text, style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w500)),
+        Flexible(
+          child: Text(text, style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w500)),
+        ),
       ],
     );
   }

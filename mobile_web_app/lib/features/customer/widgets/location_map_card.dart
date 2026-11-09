@@ -11,10 +11,10 @@ class LocationMapCard extends StatefulWidget {
 }
 
 class _LocationMapCardState extends State<LocationMapCard> {
-  // Cafeana Shop Location: 57JM+CG Bay, Laguna (approx 14.1797°N, 121.2719°E)
+  // Cafeana Shop Location: Bonifacio St. Brgy. San Agustin, Bay, Laguna (approx 14.1797°N, 121.2719°E)
   final double _shopLat = 14.1797;
   final double _shopLng = 121.2719;
-  final String _shopAddress = '57JM+CG Bay, Laguna';
+  final String _shopAddress = 'Bonifacio St. Brgy. San Agustin, Bay, Laguna';
   bool _isLoading = false;
 
   Future<void> _getDirections() async {

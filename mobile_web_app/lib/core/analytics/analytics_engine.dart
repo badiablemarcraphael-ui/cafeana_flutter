@@ -1985,6 +1985,7 @@ PrescriptiveReport _computePrescriptive(
   List<Product> products,
   _TrainingData t, {
   List<CafeOrder> allOrders = const [],
+  DateTime? now,
 }) {
   final days = t.days;
 
@@ -2222,11 +2223,11 @@ PrescriptiveReport _computePrescriptive(
   int champCount = 0, loyalCount = 0, promCount = 0, atRiskCount = 0, churnCount = 0;
   double champSpent = 0, loyalSpent = 0, promSpent = 0, atRiskSpent = 0, churnSpent = 0;
   int champOrders = 0, loyalOrders = 0, promOrders = 0, atRiskOrders = 0, churnOrders = 0;
-  final now = DateTime.now();
+  final refDate = now ?? DateTime.now();
 
   for (final entry in customerOrders.entries) {
     final oList = entry.value..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    final recency = _daysBetween(oList.first.createdAt, now);
+    final recency = _daysBetween(oList.first.createdAt, refDate);
     final freq = oList.length;
     final spend = oList.fold<double>(0, (a, b) => a + b.total);
 
@@ -2380,6 +2381,6 @@ AnalyticsReport computeAnalytics({
       range: range,
       selection: selection,
     ),
-    prescriptive: _computePrescriptive(products, training, allOrders: orders),
+    prescriptive: _computePrescriptive(products, training, allOrders: orders, now: today),
   );
 }

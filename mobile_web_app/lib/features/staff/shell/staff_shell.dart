@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:go_router/go_router.dart';
@@ -7,7 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/router.dart';
 import '../../../core/models/user_profile.dart';
 import '../../../core/providers/firebase_providers.dart';
-import '../widgets/device_status_banner.dart';
+import '../../../core/widgets/nav_toggle_handle.dart';
 
 class _StaffNavDestination {
   final IconData icon;
@@ -34,12 +33,16 @@ class StaffShell extends ConsumerStatefulWidget {
 }
 
 class _StaffShellState extends ConsumerState<StaffShell> {
-  bool _isVisible = true;
+  /// Whether the navigation rail is expanded. Toggled by the user via the
+  /// handle; it no longer auto-hides on scroll.
+  bool _isOpen = true;
 
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authStateChangesProvider).valueOrNull;
-    final profile = user != null ? ref.watch(userProfileProvider(user.uid)).valueOrNull : null;
+    final profile = user != null
+        ? ref.watch(userProfileProvider(user.uid)).valueOrNull
+        : null;
     if (profile == null) {
       return Scaffold(body: widget.child); // Do not show nav bar while loading
     }
@@ -144,120 +147,134 @@ class _StaffShellState extends ConsumerState<StaffShell> {
 
     if (isKitchen) {
       return Scaffold(
-        body: Column(
-          children: [
-            const DeviceStatusBanner(),
-            Expanded(
-              child: widget.child,
-            ),
-          ],
-        ),
+        body: widget.child,
       );
     }
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
     // Complementary rail colours — espresso anchor with caramel accents
     final railBg = isDark ? const Color(0xFF1A1210) : const Color(0xFFF9F6F0);
-    final selectedColor = isDark ? const Color(0xFFDCA87C) : const Color(0xFFC88D5D);
-    final unselectedColor = isDark ? const Color(0xFF8C7B72) : const Color(0xFF8C8077);
-    final borderColor = isDark ? const Color(0xFFDCA87C).withValues(alpha: 0.18) : const Color(0xFFEBE3DB);
+    final selectedColor = isDark
+        ? const Color(0xFFDCA87C)
+        : const Color(0xFFC88D5D);
+    final unselectedColor = isDark
+        ? const Color(0xFF8C7B72)
+        : const Color(0xFF8C8077);
+    final borderColor = isDark
+        ? const Color(0xFFDCA87C).withValues(alpha: 0.18)
+        : const Color(0xFFEBE3DB);
 
     return Scaffold(
       body: Row(
         children: [
-            // ── Complementary Navigation Rail ───────────────────────────────
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeInOut,
-              width: _isVisible ? 72 : 0, // 72 is the default width of NavigationRail
-              child: SingleChildScrollView(
-                physics: const NeverScrollableScrollPhysics(),
-                scrollDirection: Axis.horizontal,
-                child: SizedBox(
-                  width: 72,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: railBg,
-                      border: Border(
-                        right: BorderSide(color: borderColor, width: 1.5),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.20),
-                          blurRadius: 12,
-                          offset: const Offset(4, 0),
-                        ),
-                      ],
+          // ── Complementary Navigation Rail ───────────────────────────────
+          // Slides left out of view when closed, and back in when opened.
+          ClipRect(
+            child: AnimatedAlign(
+              duration: NavToggleHandle.animationDuration,
+              curve: Curves.easeInOutCubic,
+              alignment: Alignment.centerRight,
+              widthFactor: _isOpen ? 1 : 0,
+              child: SizedBox(
+                width: 72,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: railBg,
+                    border: Border(
+                      right: BorderSide(color: borderColor, width: 1.5),
                     ),
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        return SingleChildScrollView(
-                          child: ConstrainedBox(
-                            constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                            child: IntrinsicHeight(
-                              child: NavigationRail(
-                                selectedIndex: selectedIndex,
-                                onDestinationSelected: (index) {
-                                  if (index >= 0 && index < destinations.length) {
-                                    context.go(destinations[index].route);
-                                  }
-                                },
-                                backgroundColor: Colors.transparent,
-                                labelType: NavigationRailLabelType.all,
-                                selectedIconTheme: IconThemeData(color: selectedColor, size: 24),
-                                unselectedIconTheme: IconThemeData(color: unselectedColor, size: 22),
-                                selectedLabelTextStyle: TextStyle(
-                                  color: selectedColor,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 11,
-                                ),
-                                unselectedLabelTextStyle: TextStyle(
-                                  color: unselectedColor,
-                                  fontWeight: FontWeight.w500,
-                                  fontSize: 11,
-                                ),
-                                useIndicator: true,
-                                indicatorColor: const Color(0xFFDCA87C).withValues(alpha: 0.20),
-                                destinations: destinations.map((d) {
-                                  return NavigationRailDestination(
-                                    icon: Icon(d.icon),
-                                    selectedIcon: Icon(d.selectedIcon),
-                                    label: Text(d.label),
-                                  );
-                                }).toList(),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.20),
+                        blurRadius: 12,
+                        offset: const Offset(4, 0),
+                      ),
+                    ],
+                  ),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      return SingleChildScrollView(
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            minHeight: constraints.maxHeight,
+                          ),
+                          child: IntrinsicHeight(
+                            child: NavigationRail(
+                              selectedIndex: selectedIndex,
+                              onDestinationSelected: (index) {
+                                if (index >= 0 && index < destinations.length) {
+                                  context.go(destinations[index].route);
+                                }
+                              },
+                              backgroundColor: Colors.transparent,
+                              labelType: NavigationRailLabelType.all,
+                              selectedIconTheme: IconThemeData(
+                                color: selectedColor,
+                                size: 24,
                               ),
+                              unselectedIconTheme: IconThemeData(
+                                color: unselectedColor,
+                                size: 22,
+                              ),
+                              selectedLabelTextStyle: TextStyle(
+                                color: selectedColor,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 11,
+                              ),
+                              unselectedLabelTextStyle: TextStyle(
+                                color: unselectedColor,
+                                fontWeight: FontWeight.w500,
+                                fontSize: 11,
+                              ),
+                              useIndicator: true,
+                              indicatorColor: const Color(
+                                0xFFDCA87C,
+                              ).withValues(alpha: 0.20),
+                              destinations: destinations.map((d) {
+                                return NavigationRailDestination(
+                                  icon: Icon(d.icon),
+                                  selectedIcon: Icon(d.selectedIcon),
+                                  label: Text(d.label),
+                                );
+                              }).toList(),
                             ),
                           ),
-                        );
-                      },
-                    ),
+                        ),
+                      );
+                    },
                   ),
                 ),
               ),
             ),
-            // ── Page content ────────────────────────────────────────────────
-            Expanded(
-              child: NotificationListener<UserScrollNotification>(
-                onNotification: (notification) {
-                  if (notification.direction == ScrollDirection.reverse) {
-                    if (_isVisible) setState(() => _isVisible = false);
-                  } else if (notification.direction == ScrollDirection.forward) {
-                    if (!_isVisible) setState(() => _isVisible = true);
-                  }
-                  return false;
-                },
-                child: Column(
-                  children: [
-                    const DeviceStatusBanner(),
-                    Expanded(
-                      child: widget.child,
-                    ),
-                  ],
+          ),
+          // ── Page content ────────────────────────────────────────────────
+          Expanded(
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: widget.child,
                 ),
-              ),
+                // ── Open / close handle, attached to the rail's edge ─────
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  bottom: 0,
+                  child: Center(
+                    child: NavToggleHandle(
+                      isOpen: _isOpen,
+                      onTap: () => setState(() => _isOpen = !_isOpen),
+                      edge: NavHandleEdge.left,
+                      backgroundColor: railBg,
+                      borderColor: borderColor,
+                      iconColor: selectedColor,
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
+      ),
     );
   }
 }

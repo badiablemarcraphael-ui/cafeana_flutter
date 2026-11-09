@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:excel/excel.dart' as xl;
 import 'package:file_saver/file_saver.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:intl/intl.dart';
@@ -12,19 +13,31 @@ import '../models/ingredient.dart';
 /// Which part of the analytics report to export.
 enum AnalyticsExportSection { descriptive, predictive, prescriptive, customerFlow, full }
 
-/// High-precision auto-spaced tabular CSV buffer.
+/// Kind of row recorded by [_TableBuffer].
+enum _RowKind { banner, title, header, data, blank }
+
+class _BufRow {
+  _BufRow(this.kind, this.cells);
+  final _RowKind kind;
+  final List<Object?> cells;
+}
+
+/// Collects report rows and renders them either as an Excel workbook
+/// (`.xlsx`, with auto-fitted column widths, bold headers and real numeric
+/// cells) or as plain CSV text.
 ///
-/// Automatically measures maximum column widths across each table section,
-/// aligning text columns to the left and numeric/currency/percentage columns
-/// to the right with exact column padding.
+/// CSV files cannot store column widths, so Excel always opens them with
+/// narrow default columns — that is why the exports are saved as `.xlsx`.
 class _TableBuffer {
-  final StringBuffer _out = StringBuffer();
-  final List<List<String>> _currentTable = [];
+  final List<_BufRow> _rows = [];
+
+  /// True when the next data row starts a new table directly after a title
+  /// (or at the very top of a document with no banner), i.e. it is a header.
+  bool _expectHeader = true;
 
   void addRow(List<Object?> cells) {
     if (cells.isEmpty) {
-      flush();
-      _out.writeln();
+      _rows.add(_BufRow(_RowKind.blank, const []));
       return;
     }
     final firstStr = cells.first?.toString().trim() ?? '';
@@ -33,84 +46,152 @@ class _TableBuffer {
             firstStr.startsWith('===') ||
             firstStr.startsWith('Cafeana') ||
             firstStr.startsWith('CAFEANA'))) {
-      flush();
-      _out.writeln(firstStr);
+      _rows.add(_BufRow(_RowKind.banner, [firstStr]));
+      _expectHeader = false;
       return;
     }
-    _currentTable.add(cells.map((c) => _esc(c)).toList());
+    _rows.add(_BufRow(_expectHeader ? _RowKind.header : _RowKind.data, cells));
+    _expectHeader = false;
   }
 
   void addTitle(String title) {
-    flush();
-    _out.writeln();
-    _out.writeln('### $title');
+    _rows.add(_BufRow(_RowKind.blank, const []));
+    _rows.add(_BufRow(_RowKind.title, [title]));
+    _expectHeader = true;
   }
 
-  void flush() {
-    if (_currentTable.isEmpty) return;
-    final rowCount = _currentTable.length;
-    var colCount = 0;
-    for (final r in _currentTable) {
-      if (r.length > colCount) colCount = r.length;
-    }
+  // ── CSV ────────────────────────────────────────────────────────────────────
 
-    final colWidths = List<int>.filled(colCount, 0);
-    final isColNumeric = List<bool>.filled(colCount, false);
-
-    for (var c = 0; c < colCount; c++) {
-      var numericCount = 0;
-      var nonBlankCount = 0;
-      for (var r = 0; r < rowCount; r++) {
-        final val = c < _currentTable[r].length ? _currentTable[r][c] : '';
-        if (val.length > colWidths[c]) {
-          colWidths[c] = val.length;
-        }
-        if (r > 0 || rowCount == 1) {
-          final trimmed = val.replaceAll('"', '').trim();
-          if (trimmed.isNotEmpty && trimmed != '-' && trimmed != 'n/a') {
-            nonBlankCount++;
-            if (_isNumeric(trimmed)) {
-              numericCount++;
-            }
-          }
-        }
+  /// Plain, standards-compliant CSV (no padding, so every cell stays clean
+  /// when opened in Excel or imported elsewhere).
+  String toCsv() {
+    final out = StringBuffer();
+    for (final r in _rows) {
+      switch (r.kind) {
+        case _RowKind.blank:
+          out.writeln();
+        case _RowKind.title:
+          out.writeln(_esc('### ${r.cells.first}'));
+        case _RowKind.banner:
+          out.writeln(_esc(r.cells.first));
+        case _RowKind.header:
+        case _RowKind.data:
+          out.writeln(r.cells.map(_esc).join(','));
       }
-      isColNumeric[c] = nonBlankCount > 0 && (numericCount / nonBlankCount >= 0.70);
     }
-
-    for (var r = 0; r < rowCount; r++) {
-      final row = _currentTable[r];
-      final formattedCells = <String>[];
-      for (var c = 0; c < row.length; c++) {
-        final val = row[c];
-        final width = colWidths[c];
-        if (isColNumeric[c]) {
-          formattedCells.add(val.padLeft(width));
-        } else {
-          formattedCells.add(val.padRight(width));
-        }
-      }
-      _out.writeln(formattedCells.join(', '));
-    }
-
-    _currentTable.clear();
+    return out.toString();
   }
 
   @override
-  String toString() {
-    flush();
-    return _out.toString();
+  String toString() => toCsv();
+
+  // ── XLSX ───────────────────────────────────────────────────────────────────
+
+  static final _titleStyle = xl.CellStyle(
+    bold: true,
+    fontSize: 13,
+    fontColorHex: xl.ExcelColor.fromHexString('#6B4226'),
+  );
+  static final _bannerStyle = xl.CellStyle(
+    bold: true,
+    fontSize: 15,
+    fontColorHex: xl.ExcelColor.fromHexString('#2C2420'),
+  );
+  static final _headerStyle = xl.CellStyle(
+    bold: true,
+    fontColorHex: xl.ExcelColor.fromHexString('#FFFFFF'),
+    backgroundColorHex: xl.ExcelColor.fromHexString('#6B4226'),
+  );
+  static final _decimalStyle = xl.CellStyle(numberFormat: xl.NumFormat.standard_4);
+  static final _intStyle = xl.CellStyle(numberFormat: xl.NumFormat.standard_3);
+
+  /// Builds an `.xlsx` workbook with one sheet named [sheetName].
+  Uint8List toXlsx({String sheetName = 'Report'}) {
+    final book = xl.Excel.createExcel();
+    final defaultName = book.getDefaultSheet() ?? 'Sheet1';
+    book.rename(defaultName, sheetName);
+    final sheet = book[sheetName];
+
+    final widths = <int, int>{};
+    for (var r = 0; r < _rows.length; r++) {
+      final row = _rows[r];
+      for (var c = 0; c < row.cells.length; c++) {
+        final raw = row.cells[c];
+        final (value, style) = _toCell(raw, row.kind);
+        if (value == null) continue;
+        sheet.updateCell(
+          xl.CellIndex.indexByColumnRow(columnIndex: c, rowIndex: r),
+          value,
+          cellStyle: style,
+        );
+        // Titles/banners intentionally overflow into the empty cells to their
+        // right, so they must not stretch column A.
+        if (row.kind == _RowKind.title || row.kind == _RowKind.banner) continue;
+        final len = _displayLength(raw);
+        if (len > (widths[c] ?? 0)) widths[c] = len;
+      }
+    }
+
+    widths.forEach((col, chars) {
+      // ~1 Excel width unit per character, plus padding; capped so a single
+      // long note does not create an enormous column.
+      final w = (chars * 1.15 + 3).clamp(8.0, 60.0);
+      sheet.setColumnWidth(col, w.toDouble());
+    });
+
+    final bytes = book.encode();
+    return Uint8List.fromList(bytes ?? const []);
   }
 
-  static bool _isNumeric(String s) {
-    final cleaned = s
-        .replaceAll('₱', '')
-        .replaceAll('\$', '')
-        .replaceAll('%', '')
-        .replaceAll(',', '')
-        .replaceAll('+', '')
-        .trim();
-    return double.tryParse(cleaned) != null;
+  (xl.CellValue?, xl.CellStyle?) _toCell(Object? raw, _RowKind kind) {
+    if (raw == null) return (null, null);
+    switch (kind) {
+      case _RowKind.banner:
+        return (xl.TextCellValue(raw.toString()), _bannerStyle);
+      case _RowKind.title:
+        return (xl.TextCellValue(raw.toString()), _titleStyle);
+      case _RowKind.header:
+        return (xl.TextCellValue(raw.toString()), _headerStyle);
+      case _RowKind.blank:
+        return (null, null);
+      case _RowKind.data:
+        break;
+    }
+    if (raw is int) return (xl.IntCellValue(raw), _intStyle);
+    if (raw is double) return (xl.DoubleCellValue(raw), _decimalStyle);
+    final s = raw.toString();
+    if (s.isEmpty) return (null, null);
+    final n = _parseNumber(s);
+    if (n != null) {
+      if (n is int) return (xl.IntCellValue(n), _intStyle);
+      return (xl.DoubleCellValue(n.toDouble()), _decimalStyle);
+    }
+    return (xl.TextCellValue(s), null);
+  }
+
+  static final _plainNum = RegExp(r'^-?\d+(\.\d+)?$');
+  static final _groupedNum = RegExp(r'^-?\d{1,3}(,\d{3})+(\.\d+)?$');
+
+  /// Parses plain numeric strings ("123", "45.50", "1,250.00") into numbers so
+  /// Excel can sum/sort them. Values with leading zeros (IDs) stay text.
+  static num? _parseNumber(String s) {
+    final t = s.trim();
+    if (!_plainNum.hasMatch(t) && !_groupedNum.hasMatch(t)) return null;
+    final digits = t.replaceAll(',', '');
+    final unsigned = digits.startsWith('-') ? digits.substring(1) : digits;
+    if (unsigned.length > 1 && unsigned.startsWith('0') && !unsigned.startsWith('0.')) {
+      return null; // e.g. "007" is an identifier, not a number
+    }
+    if (unsigned.length > 15) return null; // avoid precision loss on long IDs
+    return digits.contains('.') ? double.tryParse(digits) : int.tryParse(digits);
+  }
+
+  static int _displayLength(Object? raw) {
+    if (raw is double) return raw.toStringAsFixed(2).length + 2;
+    if (raw is int) return raw.toString().length + 1;
+    final s = raw?.toString() ?? '';
+    // Longest line, in case a value contains line breaks.
+    return s.split('\n').fold<int>(0, (m, l) => l.length > m ? l.length : m);
   }
 
   static String _esc(Object? v) {
@@ -131,15 +212,15 @@ class ExportCsvUtil {
   static String _m(double v) => v.toStringAsFixed(2);
   static String _d(DateTime d) => DateFormat('yyyy-MM-dd').format(d);
 
-  static Future<void> _save(String name, String csv) async {
-    // UTF-8 BOM so Excel opens the file with the correct encoding.
-    final bytes = Uint8List.fromList([0xEF, 0xBB, 0xBF, ...utf8.encode(csv)]);
+  /// Saves the report as an Excel workbook (`.xlsx`) with auto-sized columns.
+  static Future<void> _save(String name, _TableBuffer table) async {
+    final bytes = table.toXlsx();
     if (kIsWeb) {
       await FileSaver.instance.saveFile(
         name: name,
         bytes: bytes,
-        fileExtension: 'csv',
-        mimeType: MimeType.csv,
+        fileExtension: 'xlsx',
+        mimeType: MimeType.microsoftExcel,
       );
       return;
     }
@@ -147,15 +228,15 @@ class ExportCsvUtil {
       await FileSaver.instance.saveAs(
         name: name,
         bytes: bytes,
-        fileExtension: 'csv',
-        mimeType: MimeType.csv,
+        fileExtension: 'xlsx',
+        mimeType: MimeType.microsoftExcel,
       );
     } catch (_) {
       await FileSaver.instance.saveFile(
         name: name,
         bytes: bytes,
-        fileExtension: 'csv',
-        mimeType: MimeType.csv,
+        fileExtension: 'xlsx',
+        mimeType: MimeType.microsoftExcel,
       );
     }
   }
@@ -164,6 +245,15 @@ class ExportCsvUtil {
 
   /// Builds the CSV text for [section]. Exposed for testing.
   static String buildAnalyticsCsv(
+          AnalyticsReport r, AnalyticsExportSection section) =>
+      _buildAnalytics(r, section).toCsv();
+
+  /// Builds the Excel workbook bytes for [section]. Exposed for testing.
+  static Uint8List buildAnalyticsXlsx(
+          AnalyticsReport r, AnalyticsExportSection section) =>
+      _buildAnalytics(r, section).toXlsx();
+
+  static _TableBuffer _buildAnalytics(
       AnalyticsReport r, AnalyticsExportSection section) {
     final b = _TableBuffer();
     _row(b, ['Cafeana Analytics Report']);
@@ -191,7 +281,7 @@ class ExportCsvUtil {
       _row(b, ['Customer Flow & RFM Segmentation Window', r.predictive.trainLabel]);
       _writeCustomerFlow(b, r.prescriptive);
     }
-    return b.toString();
+    return b;
   }
 
   static Future<void> exportAnalytics(
@@ -204,7 +294,7 @@ class ExportCsvUtil {
       AnalyticsExportSection.full => 'Full_Flow_Operations',
     };
     await _save('Cafeana_${label}_Analytics_${r.range.fileSuffix}',
-        buildAnalyticsCsv(r, section));
+        _buildAnalytics(r, section));
   }
 
   static void _writeDescriptive(_TableBuffer b, DescriptiveReport d) {
@@ -743,7 +833,7 @@ class ExportCsvUtil {
 
     await _save(
       'Cafeana_Inventory_Report_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}',
-      b.toString(),
+      b,
     );
   }
 
@@ -794,7 +884,7 @@ class ExportCsvUtil {
     final prefix = lowStockOnly ? 'Cafeana_Low_Stock_Alerts' : 'Cafeana_Stock_Holdings';
     await _save(
       '${prefix}_${DateFormat('yyyyMMdd').format(DateTime.now())}',
-      b.toString(),
+      b,
     );
   }
 
@@ -859,7 +949,7 @@ class ExportCsvUtil {
 
     await _save(
       'Cafeana_Drink_Recipes_BOM_${DateFormat('yyyyMMdd').format(DateTime.now())}',
-      b.toString(),
+      b,
     );
   }
 
@@ -907,7 +997,7 @@ class ExportCsvUtil {
 
     await _save(
       'Cafeana_Restock_Procurement_List_${DateFormat('yyyyMMdd').format(DateTime.now())}',
-      b.toString(),
+      b,
     );
   }
 

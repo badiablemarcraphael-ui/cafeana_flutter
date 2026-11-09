@@ -536,7 +536,7 @@ class _ActiveOrderCard extends ConsumerWidget {
                 backgroundColor: Theme.of(context).colorScheme.secondary,
                 foregroundColor: Theme.of(context).colorScheme.onSecondary,
               ),
-              child: const Text('Show GCash QR'),
+              child: const Text('Show Payment QR'),
             ),
             ElevatedButton(
               onPressed: () => ref
@@ -601,23 +601,44 @@ class _ActiveOrderCard extends ConsumerWidget {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('GCash QR Code'),
+        title: const Text('Payment QR Code'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             const Text('Ask the customer to scan this QR code to pay.'),
-            const SizedBox(height: 20),
-            // Placeholder for GCash QR code image.
-            // If you have a specific asset, replace this Icon with Image.asset('assets/images/gcash_qr.png')
+            const SizedBox(height: 16),
             Container(
-              width: 200,
-              height: 200,
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: Colors.grey.shade300),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.08),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
-              child: const Icon(Icons.qr_code_2, size: 150, color: Colors.blueAccent),
+              padding: const EdgeInsets.all(12),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.asset(
+                  'assets/images/qr.jpg',
+                  width: 240,
+                  height: 240,
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) => Container(
+                    width: 200,
+                    height: 200,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.qr_code_2, size: 150, color: Colors.blueAccent),
+                  ),
+                ),
+              ),
             ),
           ],
         ),
