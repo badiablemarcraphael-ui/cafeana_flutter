@@ -365,3 +365,4 @@ Categorizes customers into cohorts based on:
 ----------------------------------------------------------------------------------------
     Retention Rate (%) = ( Repeat Customers [Frequency >= 2] / Total Unique Customers ) * 100%
 ========================================================================================
+

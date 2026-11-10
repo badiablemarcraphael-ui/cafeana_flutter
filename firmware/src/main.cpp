@@ -44,8 +44,12 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // WiFi — Wokwi's built-in simulated network (no password required)
-#define WIFI_SSID "rachelpisonet"
-#define WIFI_PASSWORD "arbibi@828"
+#ifndef WIFI_SSID
+#define WIFI_SSID "akihiro"
+#endif
+#ifndef WIFI_PASSWORD
+#define WIFI_PASSWORD "qwertyuio"
+#endif
 
 // Firebase — fill from Firebase Console → Project Settings
 // Keep these in secrets.h (gitignored) for production builds.

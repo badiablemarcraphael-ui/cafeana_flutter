@@ -20,3 +20,10 @@
 #define FIREBASE_PROJECT   "cafeana-7fa42"
 #define DEVICE_EMAIL       "terminal@cafeana.internal"
 #define DEVICE_PASSWORD    "cafeana1230"
+
+#ifndef WIFI_SSID
+#define WIFI_SSID          "akihiro"
+#endif
+#ifndef WIFI_PASSWORD
+#define WIFI_PASSWORD      "qwertyuio"
+#endif
