@@ -371,9 +371,11 @@ class TrendLineChart extends StatelessWidget {
                   final header = s == spots.first
                       ? '${(tooltipLabels ?? labels)[i]}\n'
                       : '';
+                  final brightColor =
+                      Color.lerp(ser.color, Colors.white, 0.45) ?? Colors.white;
                   return LineTooltipItem(
-                    '$header${ser.name}: ${tooltipFmt(s.y)}',
-                    _tooltipText(context).copyWith(color: ser.color.withValues(alpha: 1)),
+                    '$header● ${ser.name}: ${tooltipFmt(s.y)}',
+                    _tooltipText(context).copyWith(color: brightColor),
                   );
                 }).toList();
               },
@@ -907,5 +909,655 @@ class QuadrantScatterChart extends StatelessWidget {
       Positioned(left: 56, bottom: 44, child: Text(quadrantLabels[2], style: ql)),
       Positioned(right: 6, bottom: 44, child: Text(quadrantLabels[3], style: ql)),
     ]);
+  }
+}
+
+// ── Module 09: Combination Chart (Columns + Overlaid Forecast/Goal Line) ─────
+// Matches Module 09 Fig. 9.4 (Column chart with embedded data table) and
+// Fig. 9.14 (Combination chart: Columns show actual, Line shows expected/goal).
+
+class ComboColumnLineChart extends StatelessWidget {
+  const ComboColumnLineChart({
+    super.key,
+    required this.labels,
+    required this.columnName,
+    required this.columnValues,
+    required this.columnColor,
+    required this.lineName,
+    required this.lineValues,
+    required this.lineColor,
+    required this.axisFmt,
+    required this.tooltipFmt,
+    this.tooltipLabels,
+    this.showDataTable = false,
+  });
+
+  final List<String> labels;
+  final List<String>? tooltipLabels;
+  final String columnName;
+  final List<double?> columnValues;
+  final Color columnColor;
+  final String lineName;
+  final List<double?> lineValues;
+  final Color lineColor;
+  final ValueFormatter axisFmt;
+  final ValueFormatter tooltipFmt;
+  final bool showDataTable;
+
+  @override
+  Widget build(BuildContext context) {
+    final n = labels.length;
+    if (n == 0) return emptyChart(context);
+
+    double maxV = 0;
+    for (final v in columnValues) {
+      if (v != null && v > maxV) maxV = v;
+    }
+    for (final v in lineValues) {
+      if (v != null && v > maxV) maxV = v;
+    }
+    if (maxV <= 0) return emptyChart(context);
+    final maxY = _niceMax(maxV * 1.15);
+    const leftReserved = 58.0;
+    const bottomReserved = 32.0;
+
+    final chartArea = LayoutBuilder(
+      builder: (context, box) {
+        final groupW = (box.maxWidth - leftReserved) / math.max(1, n);
+        final rodW = (groupW * 0.54).clamp(4.0, 26.0);
+        final radius =
+            BorderRadius.vertical(top: Radius.circular(math.min(6, rodW / 2)));
+
+        final barGroups = List.generate(n, (i) {
+          final val = (i < columnValues.length ? columnValues[i] : null) ?? 0.0;
+          final hasActual = i < columnValues.length && columnValues[i] != null;
+          return BarChartGroupData(
+            x: i,
+            barRods: [
+              BarChartRodData(
+                toY: val,
+                width: rodW,
+                borderRadius: radius,
+                color: hasActual
+                    ? columnColor
+                    : columnColor.withValues(alpha: 0.18),
+                backDrawRodData: BackgroundBarChartRodData(
+                  show: true,
+                  toY: maxY,
+                  color: Theme.of(context)
+                      .colorScheme
+                      .surfaceContainerHighest
+                      .withValues(alpha: 0.28),
+                ),
+              ),
+            ],
+          );
+        });
+
+        final lineSpots = <FlSpot>[
+          for (var i = 0; i < n; i++)
+            if (i < lineValues.length && lineValues[i] != null)
+              FlSpot(i.toDouble(), lineValues[i]!)
+            else
+              FlSpot.nullSpot,
+        ];
+
+        return Stack(
+          children: [
+            // Base Layer: Column Chart + Grid + Axes + Unified Tooltip
+            BarChart(
+              BarChartData(
+                minY: 0,
+                maxY: maxY,
+                alignment: BarChartAlignment.spaceAround,
+                barGroups: barGroups,
+                titlesData: _titles(
+                  context,
+                  labels: labels,
+                  leftFmt: axisFmt,
+                  width: box.maxWidth,
+                  maxY: maxY,
+                  leftReserved: leftReserved,
+                ),
+                gridData: _grid(context, maxY),
+                borderData: FlBorderData(show: false),
+                barTouchData: BarTouchData(
+                  touchTooltipData: BarTouchTooltipData(
+                    getTooltipColor: (_) => _tooltipBg(context),
+                    fitInsideHorizontally: true,
+                    fitInsideVertically: true,
+                    getTooltipItem: (group, gi, rod, ri) {
+                      final idx = group.x;
+                      final title = (tooltipLabels ?? labels)[idx];
+                      final cVal =
+                          idx < columnValues.length ? columnValues[idx] : null;
+                      final lVal =
+                          idx < lineValues.length ? lineValues[idx] : null;
+                      final buf = StringBuffer('$title\n');
+                      if (cVal != null) {
+                        buf.writeln('▮ $columnName: ${tooltipFmt(cVal)}');
+                      }
+                      if (lVal != null) {
+                        buf.write('● $lineName: ${tooltipFmt(lVal)}');
+                      }
+                      return BarTooltipItem(
+                        buf.toString().trim(),
+                        _tooltipText(context),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ),
+            // Overlay Layer: Expected / Predictive Line aligned over columns
+            Positioned.fill(
+              left: leftReserved,
+              bottom: bottomReserved,
+              child: IgnorePointer(
+                child: LineChart(
+                  LineChartData(
+                    minX: -0.5,
+                    maxX: n - 0.5,
+                    minY: 0,
+                    maxY: maxY,
+                    clipData: const FlClipData.none(),
+                    gridData: const FlGridData(show: false),
+                    borderData: FlBorderData(show: false),
+                    titlesData: const FlTitlesData(
+                      leftTitles:
+                          AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                      rightTitles:
+                          AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                      topTitles:
+                          AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                      bottomTitles:
+                          AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    ),
+                    lineTouchData: const LineTouchData(enabled: false),
+                    lineBarsData: [
+                      LineChartBarData(
+                        spots: lineSpots,
+                        isCurved: true,
+                        preventCurveOverShooting: true,
+                        color: lineColor,
+                        barWidth: 3,
+                        dashArray: [6, 4],
+                        isStrokeCapRound: true,
+                        dotData: FlDotData(
+                          show: n <= 24,
+                          getDotPainter: (spot, pct, bar, idx) =>
+                              FlDotCirclePainter(
+                            radius: 4,
+                            color: lineColor,
+                            strokeWidth: 1.5,
+                            strokeColor: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (!showDataTable || n > 10) {
+      return chartArea;
+    }
+
+    // Module 09 Slide 8 & 10: Compact Embedded Data Table beneath the chart
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(child: chartArea),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerHighest.withValues(alpha: 0.30),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.4)),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Table(
+            defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+            columnWidths: const {0: IntrinsicColumnWidth()},
+            children: [
+              TableRow(
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.only(right: 8, bottom: 4),
+                    child: Text(
+                      'Series',
+                      style:
+                          TextStyle(fontSize: 10, fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                  for (var i = 0; i < n; i++)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Text(
+                        labels[i],
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              TableRow(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8, top: 2),
+                    child: Text(
+                      '▮ $columnName',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: columnColor,
+                      ),
+                    ),
+                  ),
+                  for (var i = 0; i < n; i++)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        i < columnValues.length && columnValues[i] != null
+                            ? axisFmt(columnValues[i]!)
+                            : '—',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 10),
+                      ),
+                    ),
+                ],
+              ),
+              TableRow(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8, top: 2),
+                    child: Text(
+                      '● $lineName',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: lineColor,
+                      ),
+                    ),
+                  ),
+                  for (var i = 0; i < n; i++)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        i < lineValues.length && lineValues[i] != null
+                            ? axisFmt(lineValues[i]!)
+                            : '—',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: lineColor,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Module 09: In-Cell Data Bars + Icon Sets Table (Slides 26, 27, 29) ───────
+// Matches Fig. 9.17 (Data bars in cells) & Fig. 9.20 (Icon sets: at-a-glance status)
+
+class DataBarTableRowData {
+  const DataBarTableRowData({
+    required this.label,
+    required this.actualValue,
+    required this.actualDisplay,
+    required this.predictedValue,
+    required this.predictedDisplay,
+    required this.statusLabel,
+    required this.statusLevel, // 1 = Good (Green), 0 = Steady (Amber), -1 = Alert (Red)
+  });
+
+  final String label;
+  final double actualValue;
+  final String actualDisplay;
+  final double predictedValue;
+  final String predictedDisplay;
+  final String statusLabel;
+  final int statusLevel;
+}
+
+class DataBarsIconTable extends StatelessWidget {
+  const DataBarsIconTable({
+    super.key,
+    required this.rows,
+    required this.actualHeader,
+    required this.predictedHeader,
+    this.actualColor = const Color(0xFF8D5B3E),
+    this.predictedColor = kForecast,
+  });
+
+  final List<DataBarTableRowData> rows;
+  final String actualHeader;
+  final String predictedHeader;
+  final Color actualColor;
+  final Color predictedColor;
+
+  @override
+  Widget build(BuildContext context) {
+    if (rows.isEmpty) return emptyChart(context);
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    double maxV = 1.0;
+    for (final r in rows) {
+      if (r.actualValue > maxV) maxV = r.actualValue;
+      if (r.predictedValue > maxV) maxV = r.predictedValue;
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.45)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Header Row
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerHighest.withValues(alpha: 0.45),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(9)),
+            ),
+            child: Row(
+              children: [
+                const Expanded(
+                  flex: 3,
+                  child: Text(
+                    'Item / Category',
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+                  ),
+                ),
+                Expanded(
+                  flex: 4,
+                  child: Text(
+                    '$actualHeader (Data Bar)',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: actualColor,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 4,
+                  child: Text(
+                    '$predictedHeader (Forecast Bar)',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: predictedColor,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const SizedBox(
+                  width: 90,
+                  child: Text(
+                    'Status (Icon Set)',
+                    textAlign: TextAlign.end,
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Data Rows
+          for (var i = 0; i < rows.length; i++)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: i.isEven
+                    ? Colors.transparent
+                    : cs.surfaceContainerHighest.withValues(alpha: 0.16),
+                border: Border(
+                  top: BorderSide(
+                    color: cs.outlineVariant.withValues(alpha: 0.25),
+                  ),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: 3,
+                    child: Text(
+                      rows[i].label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    flex: 4,
+                    child: _InCellDataBar(
+                      fraction: (rows[i].actualValue / maxV).clamp(0.0, 1.0),
+                      label: rows[i].actualDisplay,
+                      color: actualColor,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    flex: 4,
+                    child: _InCellDataBar(
+                      fraction: (rows[i].predictedValue / maxV).clamp(0.0, 1.0),
+                      label: rows[i].predictedDisplay,
+                      color: predictedColor,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 90,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        Icon(
+                          rows[i].statusLevel > 0
+                              ? Icons.check_circle
+                              : (rows[i].statusLevel == 0
+                                  ? Icons.error_outline
+                                  : Icons.cancel),
+                          size: 14,
+                          color: rows[i].statusLevel > 0
+                              ? kGood
+                              : (rows[i].statusLevel == 0 ? kWarn : kBad),
+                        ),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            rows[i].statusLabel,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: rows[i].statusLevel > 0
+                                  ? kGood
+                                  : (rows[i].statusLevel == 0 ? kWarn : kBad),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InCellDataBar extends StatelessWidget {
+  const _InCellDataBar({
+    required this.fraction,
+    required this.label,
+    required this.color,
+  });
+
+  final double fraction;
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 22,
+      child: Stack(
+        alignment: Alignment.centerLeft,
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+          FractionallySizedBox(
+            widthFactor: fraction.clamp(0.02, 1.0),
+            child: Container(
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.28),
+                borderRadius: BorderRadius.circular(4),
+                border: Border(
+                  left: BorderSide(color: color, width: 3),
+                ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Module 09: Color Scales Compact Heatmap (Slide 28 Fig. 9.19) ─────────────
+
+class ColorScaleHeatmapStrip extends StatelessWidget {
+  const ColorScaleHeatmapStrip({
+    super.key,
+    required this.labels,
+    required this.values,
+    required this.valueFmt,
+    this.title = 'Color Scale Heatmap (Low → High Concentration)',
+  });
+
+  final List<String> labels;
+  final List<double> values;
+  final ValueFormatter valueFmt;
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    if (labels.isEmpty || values.isEmpty) return const SizedBox.shrink();
+    final maxV = values.fold<double>(0, math.max);
+    final minV = values.fold<double>(maxV, math.min);
+    final span = (maxV - minV) <= 0 ? 1.0 : (maxV - minV);
+    final theme = Theme.of(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: theme.textTheme.labelSmall?.copyWith(
+            fontWeight: FontWeight.w700,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 6),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              for (var i = 0; i < labels.length; i++)
+                Builder(builder: (context) {
+                  final t = ((values[i] - minV) / span).clamp(0.0, 1.0);
+                  // Accessible 3-stop scale: Soft Cream -> Warm Amber -> Deep Espresso/Cinnamon
+                  final bg = t < 0.5
+                      ? Color.lerp(
+                          const Color(0xFFE8F5E9),
+                          const Color(0xFFFFE082),
+                          t * 2,
+                        )!
+                      : Color.lerp(
+                          const Color(0xFFFFE082),
+                          const Color(0xFFD84315),
+                          (t - 0.5) * 2,
+                        )!;
+                  final fg = t > 0.72 ? Colors.white : const Color(0xFF2D1E17);
+                  return Container(
+                    width: 52,
+                    margin: const EdgeInsets.only(right: 4),
+                    padding:
+                        const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+                    decoration: BoxDecoration(
+                      color: bg,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Column(
+                      children: [
+                        Text(
+                          labels[i],
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                            color: fg.withValues(alpha: 0.85),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          valueFmt(values[i]),
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            color: fg,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 }

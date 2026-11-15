@@ -1,368 +1,319 @@
 ========================================================================================
-             CAFEANA ANALYTICS ENGINE: MATHEMATICAL MODELS & EQUATIONS
+       CAFEANA ANALYTICS GUIDE: WHAT MODELS ARE USED, HOW THEY WORK & 2 EXAMPLES EACH
 ========================================================================================
-Reference Codebase: mobile_web_app/lib/core/analytics/analytics_engine.dart
-Purpose           : Complete mathematical documentation of all statistical models, 
-                    machine learning algorithms, optimization formulas, queue simulations,
-                    and operational equations used in the Cafeana system.
-========================================================================================
-
-TABLE OF CONTENTS:
-  1. TIME-SERIES PREDICTIVE MACHINE LEARNING MODELS
-     1.1 Model 1: Holt-Winters Triple Exponential Smoothing (Additive Seasonality)
-     1.2 Model 2: Ridge Autoregressive Model (AR-7 with Harmonic Fourier Terms)
-     1.3 Model 3: Seasonal Linear Trend Model (De-seasonalized OLS)
-     1.4 Dynamic Ensemble: Inverse-RMSE Model Blending
-     1.5 Forecast Accuracy Metric: Weighted Absolute Percentage Error (WAPE)
-     1.6 Dynamic Uncertainty Bands: P10 Downside & P90 Upside (Confidence Envelopes)
-     1.7 Structural Revenue Transformation
-  2. OPERATIONAL & QUEUE SIMULATION MODELS
-     2.1 Queueing Flow Simulation (Arrivals, Throughput, Utilization)
-     2.2 Customer Queue Wait-Time Formulation
-  3. FINANCIAL & CASH FLOW METRICS
-     3.1 Average Order Value (AOV)
-     3.2 14-Day Financial Run Rate
-     3.3 Weekend Surge Rate Multiplier
-     3.4 6-Month Rolling Financial Projection
-  4. PRESCRIPTIVE & INVENTORY OPTIMIZATION
-     4.1 Daily Consumption Velocity & Momentum Growth
-     4.2 7-Day Demand Forecast & Safety Stock Formulation
-     4.3 Stockout Timeline Estimation (Days Left)
-  5. MENU ENGINEERING & MARKETING ANALYTICS
-     5.1 Boston Consulting Group (BCG) Menu Matrix Thresholds
-     5.2 Market Basket Analysis (Smart Bundle Co-Occurrence)
-  6. CUSTOMER RFM & RETENTION INTELLIGENCE
-     6.1 Recency, Frequency, Monetary (RFM) Segmentation Matrix
-     6.2 Store Customer Retention Rate Formula
-
-
-========================================================================================
- 1. TIME-SERIES PREDICTIVE MACHINE LEARNING MODELS
+Reference Codebase:
+  - Engine : mobile_web_app/lib/core/analytics/analytics_engine.dart
+  - UI Page: mobile_web_app/lib/features/staff/pages/staff_analytics_page.dart
+  - Charts : mobile_web_app/lib/features/staff/widgets/analytics_charts.dart
 ========================================================================================
 
-The forecasting engine predicts the next 14 days (h = 1, 2, ..., 14) for both 
-order volume and sales revenue.
-
+PART A: THE CORE PREDICTIVE ENGINE (3-MODEL DYNAMIC ENSEMBLE)
 ----------------------------------------------------------------------------------------
- 1.1 MODEL 1: HOLT-WINTERS TRIPLE EXPONENTIAL SMOOTHING (ADDITIVE SEASONALITY)
-----------------------------------------------------------------------------------------
-Captures baseline sales, linear growth trajectory, and 7-day cyclical weekly seasonality
-(period L = 7 days: Monday through Sunday).
+Rather than relying on just 1 formula, Cafeana uses a **Dynamic 3-Model Ensemble** that
+combines three different forecasting models and automatically gives the highest weight
+to whichever model is most accurate for your store's actual order history:
 
-* Model Equations:
-    Level Update (L_t):
-      L_t = alpha * (Y_t / S_{t-L}) + (1 - alpha) * (L_{t-1} + T_{t-1})
+  1. Model 1: Holt-Winters Triple Exponential Smoothing (Additive Seasonality)
+  2. Model 2: Ridge Autoregressive Model (AR-7 with Harmonic Fourier Terms)
+  3. Model 3: Seasonal Linear Trend Model (De-seasonalized Ordinary Least Squares)
+  4. Dynamic Ensemble Blender (Inverse-RMSE Weighting)
 
-    Trend Update (T_t):
-      T_t = beta * (L_t - L_{t-1}) + (1 - beta) * T_{t-1}
+Below is how each model works and 2 step-by-step numerical examples for each.
 
-    Seasonal Index Update (S_t):
-      S_t = gamma * (Y_t / L_t) + (1 - gamma) * S_{t-L}
+========================================================================================
+1. MODEL 1: HOLT-WINTERS TRIPLE EXPONENTIAL SMOOTHING
+========================================================================================
+* WHAT IT IS:
+  A time-series forecasting model that breaks daily sales into 3 parts:
+    1. Level (L_t)   : Your baseline average daily sales right now.
+    2. Trend (T_t)   : How much your sales are growing (or shrinking) per day.
+    3. Seasonality (S_t): Your 7-day weekly rhythm (e.g., Saturdays are busier than Mondays).
 
-    h-Step Ahead Point Forecast:
-      Y_hat_{t+h} = max(0, (L_t + h * T_t) * S_{t - L + (h mod L)})
+* HOW IT WORKS:
+  Every day, the model updates the Level, Trend, and Day-of-Week Multiplier using
+  smoothing weights (alpha, beta, gamma). To predict `h` days into the future:
+    Forecast = (Current Level + h * Daily Trend) * Seasonal Multiplier for that Weekday
 
-* Hyperparameter Optimization (Grid Search):
-    The engine runs an internal grid search across candidate parameter vectors:
-      alpha in {0.10, 0.20, 0.35}  (level responsiveness)
-      beta  in {0.05, 0.10}        (trend responsiveness)
-      gamma in {0.10, 0.25}        (seasonal responsiveness)
+* EXAMPLE 1 (Predicting a Busy Saturday — 2 Days Ahead):
+  - Current Baseline Level (L_t) = ₱3,000/day
+  - Daily Growth Trend (T_t)     = +₱50/day
+  - Saturday Seasonal Index (S)  = 1.30 (Saturdays are 30% higher than average)
+  - Horizon (h)                  = 2 days ahead
+  - Calculation:
+      Base + Trend = ₱3,000 + (2 * ₱50) = ₱3,100
+      Saturday Forecast = ₱3,100 * 1.30 = ₱4,030
 
-    Objective Function: Minimizes Sum of Squared Errors (SSE) over training history:
-      SSE = Sum_{t=1}^n (Y_t - Y_hat_t)^2
+* EXAMPLE 2 (Predicting a Quiet Monday — 4 Days Ahead):
+  - Current Baseline Level (L_t) = 40 orders/day
+  - Daily Growth Trend (T_t)     = +1.5 orders/day
+  - Monday Seasonal Index (S)    = 0.85 (Mondays are 15% lower than average)
+  - Horizon (h)                  = 4 days ahead
+  - Calculation:
+      Base + Trend = 40 + (4 * 1.5) = 46 orders
+      Monday Forecast = 46 * 0.85 = 39.1 -> 39 orders
 
+========================================================================================
+2. MODEL 2: RIDGE AUTOREGRESSIVE MODEL (AR-7 + FOURIER HARMONICS)
+========================================================================================
+* WHAT IT IS:
+  A Machine Learning regression model (L2-regularized Ridge Regression) that predicts
+  tomorrow's sales using 7 inputs:
+    - Yesterday's sales (Lag-1: immediate momentum)
+    - Exact same day last week (Lag-7: weekly habit)
+    - Last 7 days rolling average (MA-7: recent stability)
+    - Sine & Cosine waves (7-day cyclical curve)
+    - Time drift & intercept
 
-----------------------------------------------------------------------------------------
- 1.2 MODEL 2: RIDGE AUTOREGRESSIVE MODEL (AR-7 WITH HARMONIC FOURIER TERMS)
-----------------------------------------------------------------------------------------
-Frames forecasting as a regularized linear regression trained on historical lags, rolling
-averages, and trigonometric seasonal harmonics.
+* HOW IT WORKS:
+  It learns weights (w) for each input with a Ridge penalty (lambda = 1.0) so a single
+  unusual spike (like a one-time catering order) doesn't distort future predictions:
+    Forecast = w0 + w_lag1*(Yesterday) + w_lag7*(Last Week Same Day) + w_ma7*(7-Day Avg) + Seasonal Wave
 
-* 7-Dimensional Feature Vector for Day t (with weekday index w in {0, ..., 6}):
-    X_t = [ 1.0, 
-            t / 100.0, 
-            sin(2 * pi * w / 7.0), 
-            cos(2 * pi * w / 7.0), 
-            Y_{t-1}, 
-            Y_{t-7}, 
-            MA7_t ]^T
+* EXAMPLE 1 (Predicting Revenue After a Strong Yesterday):
+  Suppose the learned weights give:
+    0.35 * Yesterday + 0.40 * Same Day Last Week + 0.25 * 7-Day Average
+  - Yesterday's Sales (Lag-1)       = ₱3,600
+  - Last Friday's Sales (Lag-7)     = ₱3,800
+  - 7-Day Moving Average (MA-7)     = ₱3,200
+  - Calculation:
+      Forecast = (0.35 * 3,600) + (0.40 * 3,800) + (0.25 * 3,200)
+               = ₱1,260 + ₱1,520 + ₱800 = ₱3,580
 
-    Where:
-      - 1.0                  : Bias / Intercept
-      - t / 100.0            : Normalized global time drift
-      - sin(...), cos(...)   : First harmonic Fourier curve capturing 7-day cyclical oscillations
-      - Y_{t-1} (Lag 1)      : Immediate yesterday momentum
-      - Y_{t-7} (Lag 7)      : Same-day weekly autoregression (e.g. Saturday to Saturday)
-      - MA7_t                : 7-day rolling moving average: (1/7) * Sum_{k=1}^7 Y_{t-k}
+* EXAMPLE 2 (Predicting Order Count on a Normal Wednesday):
+  Using the same learned weights (0.35 Lag-1, 0.40 Lag-7, 0.25 MA-7):
+  - Yesterday's Orders (Lag-1)      = 28 orders
+  - Last Wednesday's Orders (Lag-7) = 30 orders
+  - 7-Day Moving Average (MA-7)     = 32 orders
+  - Calculation:
+      Forecast = (0.35 * 28) + (0.40 * 30) + (0.25 * 32)
+               = 9.8 + 12.0 + 8.0 = 29.8 -> 30 orders
 
-* L2 Regularized Optimization (Ridge Penalty):
-    Cost Function:
-      J(w) = || Y - X*w ||_2^2 + lambda * || w ||_2^2
+========================================================================================
+3. MODEL 3: SEASONAL LINEAR TREND MODEL (DE-SEASONALIZED OLS)
+========================================================================================
+* WHAT IT IS:
+  Ordinary Least Squares (OLS) linear regression combined with Bayesian weekday shrinkage.
 
-    Closed-Form Analytical Solution (lambda = 1.0):
-      w = (X^T * X + lambda * I)^(-1) * (X^T * Y)
+* HOW IT WORKS:
+  Step 1: Removes the day-of-week effect ("de-seasonalizes" the data) so weekend spikes
+          don't fool the straight line.
+  Step 2: Fits a straight trend line `y = b + m * t` (Intercept `b` + Daily Slope `m`).
+  Step 3: Multiplies the straight line back by the target weekday's seasonal index `S_w`.
 
-* Forward Autoregressive Prediction:
-    Y_hat_{t+h} = max(0, X_{t+h}^T * w)
-    (Predicted values feed iteratively into subsequent Lag 1 and MA7 calculations).
+* EXAMPLE 1 (Predicting Sunday Sales on Day t = 30):
+  - Fitted Intercept (b)      = ₱2,500
+  - Fitted Daily Slope (m)    = +₱20/day
+  - Target Day (t)            = Day 30
+  - Sunday Seasonal Index     = 1.25
+  - Calculation:
+      De-seasonalized TrendLine = ₱2,500 + (₱20 * 30) = ₱3,100
+      Sunday Forecast = ₱3,100 * 1.25 = ₱3,875
 
+* EXAMPLE 2 (Predicting Tuesday Orders on Day t = 15):
+  - Fitted Intercept (b)      = 25 orders
+  - Fitted Daily Slope (m)    = +0.4 orders/day
+  - Target Day (t)            = Day 15
+  - Tuesday Seasonal Index    = 0.88
+  - Calculation:
+      De-seasonalized TrendLine = 25 + (0.4 * 15) = 31 orders
+      Tuesday Forecast = 31 * 0.88 = 27.28 -> 27 orders
 
-----------------------------------------------------------------------------------------
- 1.3 MODEL 3: SEASONAL LINEAR TREND MODEL (DE-SEASONALIZED OLS)
-----------------------------------------------------------------------------------------
-Establishes a baseline growth trajectory decoupled from weekly noise.
+========================================================================================
+4. DYNAMIC ENSEMBLE BLENDER (INVERSE-RMSE WEIGHTING)
+========================================================================================
+* WHAT IT IS:
+  Combines Models 1, 2, and 3 by checking which model made the smallest errors (Root Mean
+  Squared Error, RMSE) on past days.
 
-* Step 1: Empirical Weekday Index Calculation:
-    S_w = weight * (Y_bar_w / Y_bar_global) + (1 - weight) * Prior_w
-    where:
-      weight = N_w / (N_w + 3.0)  (Bayesian shrinkage weighting)
-      Prior  = [0.85, 0.88, 0.92, 0.95, 1.15, 1.35, 1.25] (Mon -> Sun cafe industry prior)
+* HOW IT WORKS:
+  Each model gets a weight proportional to `1 / RMSE`. Smaller error = bigger vote!
+    Weight_m = (1 / RMSE_m) / (1/RMSE_1 + 1/RMSE_2 + 1/RMSE_3)
+    Final Prediction = (Weight_1 * Pred_1) + (Weight_2 * Pred_2) + (Weight_3 * Pred_3)
 
-* Step 2: De-seasonalization:
-    Y_tilde_t = Y_t / S_{w(t)}
+* EXAMPLE 1 (Combining 3 Revenue Predictions):
+  Suppose on past data:
+  - Holt-Winters RMSE = ₱200  -> 1/200 = 0.0050 (Weight = 50%)
+  - Ridge AR-7 RMSE   = ₱333  -> 1/333 = 0.0030 (Weight = 30%)
+  - Seasonal OLS RMSE = ₱500  -> 1/500 = 0.0020 (Weight = 20%)
+  For tomorrow, their predictions are:
+  - Holt-Winters = ₱4,000 | Ridge AR-7 = ₱3,800 | Seasonal OLS = ₱3,600
+  - Calculation:
+      Final Ensemble Forecast = (0.50 * 4,000) + (0.30 * 3,800) + (0.20 * 3,600)
+                              = ₱2,000 + ₱1,140 + ₱720 = ₱3,860
 
-* Step 3: Ordinary Least Squares (OLS) Linear Fit:
-    Slope (m):
-      m = ( n * Sum(t * Y_tilde_t) - Sum(t) * Sum(Y_tilde_t) ) / ( n * Sum(t^2) - (Sum(t))^2 )
-
-    Intercept (b):
-      b = ( Sum(Y_tilde_t) - m * Sum(t) ) / n
-
-* Step 4: Re-seasonalized Point Prediction:
-    Y_hat_{t+h} = max(0, (b + m * (t + h)) * S_{w(t+h)})
-
-
-----------------------------------------------------------------------------------------
- 1.4 DYNAMIC ENSEMBLE: INVERSE-RMSE MODEL BLENDING
-----------------------------------------------------------------------------------------
-Rather than relying on a single algorithm, the engine backtests each candidate model
-on the historical series and computes its Root Mean Squared Error (RMSE):
-
-    RMSE_m = sqrt( (1 / n) * Sum_{t=1}^n (Y_t - Y_hat_{m, t})^2 )
-
-* Dynamic Inverse-Error Weight Calculation:
-    w_m = ( 1 / max(0.01, RMSE_m) ) / Sum_{k in {HW, Ridge, SL}} ( 1 / max(0.01, RMSE_k) )
-
-* Final Blended Ensemble Forecast:
-    Y_hat_ensemble = w_HW * Y_hat_HW + w_Ridge * Y_hat_Ridge + w_SL * Y_hat_SL
-
-
-----------------------------------------------------------------------------------------
- 1.5 FORECAST ACCURACY METRIC: WEIGHTED ABSOLUTE PERCENTAGE ERROR (WAPE)
-----------------------------------------------------------------------------------------
-Standard MAPE divides by actual daily sales (|Y - Y_hat| / Y). On quiet days with 0 or 1
-orders, MAPE explodes toward infinity. The engine utilizes WAPE (Weighted Absolute
-Percentage Error):
-
-    WAPE = Sum_{t=1}^n | Y_t - Y_hat_t | / Sum_{t=1}^n Y_t
-
-* Reported System Accuracy:
-    Model Accuracy (%) = max(0, 1.0 - WAPE) * 100%
-
-
-----------------------------------------------------------------------------------------
- 1.6 DYNAMIC UNCERTAINTY BANDS: P10 DOWNSIDE & P90 UPSIDE (CONFIDENCE ENVELOPES)
-----------------------------------------------------------------------------------------
-Quantifies prediction risk using residual standard deviation (sigma_res = RMSE_ensemble).
-Uncertainty scales with the forecast horizon step h in {1, ..., 14}:
-
-* For Order Count:
-    Margin_orders(h) = 1.28 * max( sigma_res, sqrt(max(1.0, Y_hat) * 1.5) ) * sqrt( 1.0 + 0.03 * h )
-
-* For Revenue:
-    Margin_revenue(h) = 1.28 * max( sigma_res, Y_hat * 0.16 + 50.0 ) * sqrt( 1.0 + 0.04 * h )
-
-* Confidence Envelopes (80% confidence interval, z = 1.28):
-    P10 (Pessimistic Floor / "Rainy Day" Scenario):
-      P10 = max(0, Y_hat - Margin(h))
-
-    P90 (Optimistic Ceiling / "Rush Surge" Scenario):
-      P90 = Y_hat + Margin(h)
-
-
-----------------------------------------------------------------------------------------
- 1.7 STRUCTURAL REVENUE TRANSFORMATION
-----------------------------------------------------------------------------------------
-Revenue is coupled with expected volume and historical day-of-week Average Order Value:
-    Structural_Rev(h) = Y_hat_orders(h) * AOV_{w(h)}
-
-The final revenue forecast blends the statistical ML series with structural economics:
-    Y_hat_final_rev = 0.65 * Y_hat_ensemble_rev + 0.35 * Structural_Rev
+* EXAMPLE 2 (Combining 3 Order Count Predictions):
+  Suppose the weights are 40% Holt-Winters, 40% Ridge AR-7, and 20% Seasonal OLS.
+  For tomorrow, their predictions are:
+  - Holt-Winters = 45 orders | Ridge AR-7 = 42 orders | Seasonal OLS = 40 orders
+  - Calculation:
+      Final Ensemble Forecast = (0.40 * 45) + (0.40 * 42) + (0.20 * 40)
+                              = 18.0 + 16.8 + 8.0 = 42.8 -> 43 orders
 
 
 ========================================================================================
- 2. OPERATIONAL & QUEUE SIMULATION MODELS
+PART B: HOW EACH OF THE 8 SINGLE-PAGE ANALYTICS CARDS WORKS (WITH 2 EXAMPLES EACH)
 ========================================================================================
 
 ----------------------------------------------------------------------------------------
- 2.1 QUEUEING FLOW SIMULATION (HOURLY BOTTLENECK ANALYSIS)
+CARD 01: SALES REVENUE (DESCRIPTIVE + PREDICTIVE + PRESCRIPTIVE)
 ----------------------------------------------------------------------------------------
-Models customer arrivals and kitchen throughput for each hour h in {0, ..., 23}:
-
-* Arrival Rate (lambda_h):
-    lambda_h = Mean orders arriving during hour h on that specific weekday.
-
-* Barista Preparation Capacity (mu):
-    mu = 12 orders / barista / hour (industry cafe service benchmark).
-
-* Active Staffing (c_h):
-    c_h = max( 1, ceil( lambda_h / mu ) )
-
-* Total Station Service Capacity (C_h):
-    C_h = c_h * mu
-
-* System Utilization (Traffic Intensity rho):
-    rho = lambda_h / C_h
-
+* MODEL USED:
+  3-Model Ensemble blended with Structural Revenue (65% ML Revenue Forecast + 35%
+  [Predicted Orders * Weekday Average Order Value]), plus 80% Confidence Bands (P10–P90).
+* HOW IT WORKS:
+  - Solid Blue Line : Actual daily peso sales.
+  - Dashed Purple   : What the AI model predicted for those past days + next 14 days.
+  - Shaded Band     : P10 (Slow/Rainy Day floor) to P90 (Busy Rush ceiling).
+* EXAMPLE 1 (Tomorrow's Revenue Forecast):
+  - ML Revenue Ensemble = ₱3,500
+  - Predicted Orders = 30 orders, Weekday Avg Spend (AOV) = ₱120 -> Structural = ₱3,600
+  - Final Predicted Sales = (0.65 * ₱3,500) + (0.35 * ₱3,600) = ₱2,275 + ₱1,260 = ₱3,535
+* EXAMPLE 2 (P10–P90 Safe Range Calculation):
+  - Final Predicted Sales = ₱3,535, Margin = ₱650
+  - Slow Day Floor (P10) = ₱3,535 - ₱650 = ₱2,885
+  - Busy Day Ceiling (P90) = ₱3,535 + ₱650 = ₱4,185
 
 ----------------------------------------------------------------------------------------
- 2.2 CUSTOMER QUEUE WAIT-TIME FORMULATION
+CARD 02: DAILY ORDER VOLUME (DESCRIPTIVE + PREDICTIVE + PRESCRIPTIVE)
 ----------------------------------------------------------------------------------------
-Projects expected customer queue wait time W_q (in minutes) based on traffic intensity rho:
+* MODEL USED:
+  3-Model Time-Series Ensemble (Holt-Winters + Ridge AR-7 + Seasonal OLS) on daily
+  completed order counts.
+* HOW IT WORKS:
+  - Green Columns   : Actual number of customer orders completed each day.
+  - Dashed Line     : Predicted order count for each past day + 14-day ahead forecast.
+* EXAMPLE 1 (Comparing Actual vs. Predicted on a Past Day):
+  - Actual Friday Orders (Column) = 48 orders
+  - AI Expected Friday Orders (Line) = 44 orders
+  - Insight: Friday beat expectations by +4 orders (+9.1%).
+* EXAMPLE 2 (14-Day Total & Daily Average Order Forecast):
+  - Sum of next 14 days of predicted orders = 490 orders
+  - Expected Daily Average = 490 / 14 = 35 orders/day
+  - Prescriptive Action: Since 35 orders/day >= 25, schedule 2 baristas during rush hours.
 
-    W_q(rho) =
-      |  0.0 minutes                             , if lambda_h = 0  (Closed/Quiet)
-      |  2.0 + 3.0 * rho                         , if 0.00 < rho < 0.60  (Optimal)
-      |  4.0 + 12.0 * (rho - 0.60)               , if 0.60 <= rho < 0.85  (Steady)
-      |  8.0 + 40.0 * (rho - 0.85)               , if 0.85 <= rho < 1.00  (Peak Rush)
-      |  15.0 + 30.0 * (rho - 1.00)              , if rho >= 1.00  (Congested Bottleneck)
+----------------------------------------------------------------------------------------
+CARD 03: AVERAGE SPEND PER ORDER / AOV (DESCRIPTIVE + PREDICTIVE + PRESCRIPTIVE)
+----------------------------------------------------------------------------------------
+* MODEL USED:
+  Ratio Derivation Model: `AOV_t = Revenue_t / Orders_t` (Actual vs. Ensemble Predicted),
+  paired with Market Basket Co-Occurrence Bundling (10% combo discount).
+* HOW IT WORKS:
+  - Amber Solid Line : Actual average pesos spent per customer receipt (`Sales / Orders`).
+  - Purple Dashed    : Expected spend per order (`Predicted Sales / Predicted Orders`).
+* EXAMPLE 1 (Actual vs. Predicted Spend per Order):
+  - Today's Actual Sales = ₱3,600 across 30 orders -> Actual AOV = ₱3,600 / 30 = ₱120.00
+  - Today's Predicted Sales = ₱3,450 across 30 orders -> Predicted AOV = ₱3,450 / 30 = ₱115.00
+* EXAMPLE 2 (Prescriptive Smart Combo Bundle Pricing):
+  - Best-selling pair in receipts: Spanish Latte (₱130) + Croissant (₱90)
+  - Regular Total = ₱130 + ₱90 = ₱220
+  - Prescriptive 10% Combo Price = ₱220 * (1 - 0.10) = ₱198 (boosts AOV when regular AOV < ₱180).
 
+----------------------------------------------------------------------------------------
+CARD 04: TOP-SELLING DRINKS (DESCRIPTIVE + PREDICTIVE + PRESCRIPTIVE)
+----------------------------------------------------------------------------------------
+* MODEL USED:
+  Velocity-Momentum Demand Forecasting & Safety Stock Optimization Model.
+* HOW IT WORKS:
+  1. Daily Velocity (`d_bar`) = Units sold over window / Number of days
+  2. Momentum Ratio (`g`)     = Second-half sales / First-half sales
+  3. 7-Day Forecast (`D_7`)   = `d_bar * g * 7 days`
+  4. Target Safe Stock        = `ceil(D_7 * 1.30)` (includes 30% safety buffer)
+  5. Reorder Quantity         = `max(0, Target Safe Stock - Current Stock)`
+* EXAMPLE 1 (Trending Drink Needs Restock — Yellow/Red Alert):
+  - Caramel Macchiato sold 28 cups over 7 days -> `d_bar` = 4 cups/day
+  - First half = 12 cups, Second half = 15 cups -> Momentum `g` = 15 / 12 = 1.25
+  - Predicted Next 7 Days (`D_7`) = 4 * 1.25 * 7 = 35 cups
+  - Target Safe Stock (with 30% buffer) = ceil(35 * 1.30) = 46 cups
+  - If Current Stock = 20 cups -> Prescriptive Action: "Order +26 units now" (46 - 20 = 26).
+* EXAMPLE 2 (Steady Drink with Plenty of Stock — Green Healthy):
+  - Americano sold 21 cups over 7 days -> `d_bar` = 3 cups/day, Momentum `g` = 1.0
+  - Predicted Next 7 Days (`D_7`) = 3 * 1.0 * 7 = 21 cups
+  - Target Safe Stock = ceil(21 * 1.30) = 28 cups
+  - If Current Stock = 40 cups -> Reorder = max(0, 28 - 40) = 0 ("Healthy — Stock OK").
 
+----------------------------------------------------------------------------------------
+CARD 05: SALES BY CATEGORY (DESCRIPTIVE + PREDICTIVE + PRESCRIPTIVE)
+----------------------------------------------------------------------------------------
+* MODEL USED:
+  Proportional Category Allocation Model (`Category Share % * 7-Day Ensemble Revenue Forecast`).
+* HOW IT WORKS:
+  1. Computes each category's share of actual sales: `Share_c = Category_Sales / Total_Sales`.
+  2. Multiplies each category's share by the AI's next 7-day total store revenue forecast
+     (scaled to match the selected date window) to draw the Expected Line over the Columns.
+* EXAMPLE 1 (Dominant Coffee Category):
+  - Historical Total Sales (7 days) = ₱20,000; Espresso & Coffee = ₱11,000 (55% share)
+  - Next 7-Day Predicted Store Sales = ₱24,000
+  - Predicted Coffee Category Sales = 55% * ₱24,000 = ₱13,200
+* EXAMPLE 2 (Smaller Pastries Category):
+  - Historical Pastries Sales (7 days) = ₱3,000 out of ₱20,000 (15% share)
+  - Next 7-Day Predicted Store Sales = ₱24,000
+  - Predicted Pastries Sales = 15% * ₱24,000 = ₱3,600
+
+----------------------------------------------------------------------------------------
+CARD 06: BUSIEST HOURS OF THE DAY / PEAK HOURS (DESCRIPTIVE + PREDICTIVE + PRESCRIPTIVE)
+----------------------------------------------------------------------------------------
+* MODEL USED:
+  M/M/c-Inspired Hourly Queueing & Traffic Intensity (`rho`) Simulation Model +
+  Hourly Demand Scaling.
+* HOW IT WORKS:
+  - Scales each hour's historical average orders by tomorrow's predicted volume multiplier:
+      `Tomorrow_Hour_Orders = Usual_Hour_Orders * (Tomorrow_Total_Forecast / Usual_Daily_Avg)`
+  - Computes Barista Utilization (`rho`):
+      `rho = Hourly_Orders / (Active_Baristas * 12 orders/hr capacity)`
+  - Estimates customer wait time (`W_q`) from `rho` and colors the Heatmap Strip.
+* EXAMPLE 1 (Morning Rush Hour at 9:00 AM):
+  - Usual 9:00 AM orders = 8 orders/hr; Tomorrow is a busy Saturday (1.25x usual volume)
+  - Tomorrow's Predicted 9:00 AM Rush = 8 * 1.25 = 10 orders
+  - With 1 barista (capacity = 12 orders/hr): Utilization `rho` = 10 / 12 = 0.83 (83%)
+  - Estimated Wait Time = `4.0 + 12.0 * (0.83 - 0.60)` = 6.8 minutes -> Pre-prep ice & espresso!
+* EXAMPLE 2 (Quiet Afternoon Hour at 3:00 PM):
+  - Usual 3:00 PM orders = 3 orders/hr; Tomorrow multiplier = 1.0x
+  - Tomorrow's Predicted 3:00 PM Rush = 3 orders
+  - With 1 barista (12 orders/hr): Utilization `rho` = 3 / 12 = 0.25 (25%)
+  - Estimated Wait Time = `2.0 + 3.0 * 0.25` = 2.75 -> ~3 minutes (Optimal green heatmap).
+
+----------------------------------------------------------------------------------------
+CARD 07: SALES BY DAY OF THE WEEK (DESCRIPTIVE + PREDICTIVE + PRESCRIPTIVE)
+----------------------------------------------------------------------------------------
+* MODEL USED:
+  Day-of-Week Seasonal Decomposition & Next-7-Day Calendar Forecast Mapping +
+  Weekend Surge Multiplier (`(Weekend_Avg - Weekday_Avg) / Weekday_Avg`).
+* HOW IT WORKS:
+  - Columns show historical average sales for Mon, Tue, Wed, Thu, Fri, Sat, Sun.
+  - Overlaid Line maps the AI's next 7 calendar days of predictions onto their matching
+    weekdays (Monday through Sunday) and compares Weekend vs. Weekday performance.
+* EXAMPLE 1 (Strong Weekend Surge):
+  - Average Weekday Sales (Mon–Fri) = ₱2,800/day
+  - Average Weekend Sales (Sat–Sun) = ₱3,920/day
+  - Weekend Surge = `((3,920 - 2,800) / 2,800) * 100%` = +40.0% higher on weekends
+  - Prescriptive Action: Schedule full barista team on Sat/Sun; run a promo on slowest weekday.
+* EXAMPLE 2 (Comparing Usual Wednesday vs. Next Wednesday Forecast):
+  - Usual Wednesday Average (Column) = ₱2,650
+  - Next Wednesday AI Forecast (Line) = ₱2,910 (driven by upward store trend)
+  - Embedded Table shows both ₱2,650 (Usual) and ₱2,910 (Next Week) side by side.
+
+----------------------------------------------------------------------------------------
+CARD 08: CUSTOMER LOYALTY & REPEAT VISITS (DESCRIPTIVE + PREDICTIVE + PRESCRIPTIVE)
+----------------------------------------------------------------------------------------
+* MODEL USED:
+  RFM (Recency, Frequency, Monetary) Cohort Segmentation Model + Retention Target Model.
+* HOW IT WORKS:
+  Groups every customer in the database by:
+    - Recency (R)  : Days since their last order
+    - Frequency (F): Total completed orders
+    - Monetary (M) : Total pesos spent
+  Then compares Current Cohort Counts (Columns) against a Healthy Café Target Line:
+    - VIP & Loyal Regulars Target : +25% growth (`max(Current + 1, round(Current * 1.25))`)
+    - New / Promising Target      : +20% growth (`max(Current + 1, round(Current * 1.20))`)
+    - Slipping Away (At-Risk) Goal: Reduce by 50% (`floor(Current * 0.50)`)
+* EXAMPLE 1 (Classifying Customers with RFM Numbers):
+  - Customer A: 5 orders total (F=5), last visited 3 days ago (R=3), spent ₱850 ->
+    Since F >= 4 and R <= 7, Customer A is classified as a **Champion (VIP Regular)**.
+  - Customer B: 3 orders total (F=3), last visited 20 days ago (R=20), spent ₱420 ->
+    Since F >= 2 and 14 < R <= 30, Customer B is **At-Risk (Slipping Away)**.
+* EXAMPLE 2 (Calculating Current vs. Target Goal Line in Card 08):
+  - Current VIP & Loyal Regulars = 8 customers -> Target Line = `round(8 * 1.25)` = 10 customers
+  - Current Slipping Away (At-Risk) = 6 customers -> Target Line = `floor(6 * 0.50)` = 3 customers
+  - Prescriptive Action: Send a "We Miss You" ₱20-off voucher to win back at least 3 of the
+    6 slipping-away customers.
 ========================================================================================
- 3. FINANCIAL & CASH FLOW METRICS
-========================================================================================
-
-----------------------------------------------------------------------------------------
- 3.1 AVERAGE ORDER VALUE (AOV)
-----------------------------------------------------------------------------------------
-    AOV = ( Total Valid Gross Sales ) / ( Total Completed Orders )
-    Where valid orders are strictly: status != OrderStatus.cancelled.
-
-----------------------------------------------------------------------------------------
- 3.2 14-DAY FINANCIAL RUN RATE
-----------------------------------------------------------------------------------------
-    Daily Run Rate = ( Sum_{h=1}^{14} Y_hat_revenue(h) ) / 14
-
-----------------------------------------------------------------------------------------
- 3.3 WEEKEND SURGE RATE MULTIPLIER
-----------------------------------------------------------------------------------------
-Measures customer demand acceleration on Saturday and Sunday vs. standard weekdays:
-
-    Rev_weekend_avg = Sum(Weekend Revenue) / Total Weekend Days
-    Rev_weekday_avg = Sum(Weekday Revenue) / Total Weekday Days
-
-    Weekend Surge (%) = ( (Rev_weekend_avg - Rev_weekday_avg) / Rev_weekday_avg ) * 100%
-
-----------------------------------------------------------------------------------------
- 3.4 6-MONTH ROLLING FINANCIAL PROJECTION
-----------------------------------------------------------------------------------------
-Tracks 5 historical months + current active month + 1 future month:
-    Current Month Total = Actual Revenue to Date + Projected Revenue for Remaining Days
-
-
-========================================================================================
- 4. PRESCRIPTIVE & INVENTORY OPTIMIZATION
-========================================================================================
-
-----------------------------------------------------------------------------------------
- 4.1 DAILY CONSUMPTION VELOCITY & MOMENTUM GROWTH
-----------------------------------------------------------------------------------------
-For each menu product p:
-
-* Average Daily Consumption Rate (d_bar):
-    d_bar = Total Units Sold / Training Days
-
-* Momentum Growth Ratio (g):
-    Compares sales in the first half of the window (U_first) vs. the second half (U_second):
-    g = U_second / max( 1.0, U_first )
-
-----------------------------------------------------------------------------------------
- 4.2 7-DAY DEMAND FORECAST & SAFETY STOCK FORMULATION
-----------------------------------------------------------------------------------------
-* 7-Day Forward Demand Projection:
-    D_7 = d_bar * g * 7 days
-
-* Recommended Target Stock Level (with 1.30 safety buffer):
-    Target Stock = ceil( D_7 * 1.30 )
-
-* Reorder Quantity to Purchase:
-    Reorder Units = max( 0, Target Stock - Current Stock )
-
-* Urgency Thresholds:
-    - CRITICAL  : Current Stock == 0 or Days Left < 1.0 day
-    - LOW STOCK : Days Left < 3.0 days
-    - HEALTHY   : Days Left >= 3.0 days
-
-----------------------------------------------------------------------------------------
- 4.3 STOCKOUT TIMELINE ESTIMATION (DAYS LEFT)
-----------------------------------------------------------------------------------------
-    Days Left = Current Stock / ( d_bar * g )
-    Stockout Date = Today + floor( Days Left )
-
-
-========================================================================================
- 5. MENU ENGINEERING & MARKETING ANALYTICS
-========================================================================================
-
-----------------------------------------------------------------------------------------
- 5.1 BOSTON CONSULTING GROUP (BCG) MENU MATRIX THRESHOLDS
-----------------------------------------------------------------------------------------
-Evaluates menu profitability and popularity thresholds:
-
-* Popularity Threshold (theta_pop):
-    theta_pop = 0.70 * ( Total Units Sold / Count of Unique Menu Items )
-
-* Profitability / Price Threshold (theta_price):
-    theta_price = Total Product Revenue / Total Units Sold
-
-* Classification Matrix:
-    1. STARS      : Units Sold >= theta_pop  AND  Avg Price >= theta_price
-                    (High Volume, High Profit -> Protect quality & recipe consistency)
-    2. PLOWHORSES : Units Sold >= theta_pop  AND  Avg Price < theta_price
-                    (High Volume, Low Profit -> Popular staples; increase price by ₱5-₱10)
-    3. PUZZLES    : Units Sold < theta_pop   AND  Avg Price >= theta_price
-                    (Low Volume, High Profit -> Gourmet items; boost social promotions)
-    4. DOGS       : Units Sold < theta_pop   AND  Avg Price < theta_price
-                    (Low Volume, Low Profit -> Low demand; consider retiring or replacing)
-
-----------------------------------------------------------------------------------------
- 5.2 MARKET BASKET ANALYSIS (SMART BUNDLE CO-OCCURRENCE)
-----------------------------------------------------------------------------------------
-Scans multi-item receipts to identify beverage-pastry co-occurrence:
-
-* Pair Co-Occurrence Frequency:
-    PairCount(A, B) = Count of orders where both Item A and Item B are present.
-
-* Bundle Share:
-    Share(A, B) = PairCount(A, B) / Total Multi-Item Orders
-
-* Recommended Bundle Combo Pricing (10% Discount):
-    Regular Price = Price_A + Price_B
-    Bundle Price  = Regular Price * (1.0 - 0.10)
-
-
-========================================================================================
- 6. CUSTOMER RFM & RETENTION INTELLIGENCE
-========================================================================================
-
-----------------------------------------------------------------------------------------
- 6.1 RECENCY, FREQUENCY, MONETARY (RFM) SEGMENTATION MATRIX
-----------------------------------------------------------------------------------------
-Categorizes customers into cohorts based on:
-  - Recency (R)  : Days elapsed since customer's last order ( Today - LastOrderDate )
-  - Frequency (F): Total count of lifetime completed orders
-  - Monetary (M) : Total cumulative pesos spent
-
-* Segmentation Rules:
-    1. Champions (VIP Regulars) : Frequency >= 4 orders  AND  Recency <= 7 days
-    2. Loyal Patrons            : Frequency >= 3 orders  AND  Recency <= 14 days
-    3. Promising High-Value     : Frequency <= 2 orders  AND  Recency <= 10 days  AND Spend >= ₱300
-    4. At-Risk (Churn Warning)  : Frequency >= 2 orders  AND  14 days < Recency <= 30 days
-    5. Occasional / Inactive    : Recency > 30 days or Single-visit walk-ins
-
-----------------------------------------------------------------------------------------
- 6.2 STORE CUSTOMER RETENTION RATE FORMULA
-----------------------------------------------------------------------------------------
-    Retention Rate (%) = ( Repeat Customers [Frequency >= 2] / Total Unique Customers ) * 100%
-========================================================================================
-
