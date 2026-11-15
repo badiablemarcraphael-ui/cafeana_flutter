@@ -325,7 +325,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
 
                 const SizedBox(height: 28),
 
-                // ── Sign out ─────────────────────────────────────────────────
+                // ── Sign out & Privacy / Account Deletion ──────────────────
                 PremiumSectionHeader(
                   title: 'Account Actions',
                   icon: Icons.settings_rounded,
@@ -335,45 +335,165 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
 
                 AnimatedGlassCard(
                   padding: EdgeInsets.zero,
-                  child: ListTile(
-                    leading: Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: cs.errorContainer.withValues(alpha: 0.5),
-                        borderRadius: BorderRadius.circular(10),
+                  child: Column(
+                    children: [
+                      ListTile(
+                        leading: Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: cs.primaryContainer.withValues(alpha: 0.5),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(
+                            Icons.privacy_tip_outlined,
+                            color: cs.onPrimaryContainer,
+                            size: 20,
+                          ),
+                        ),
+                        title: const Text(
+                          'Privacy Policy & Data Safety',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        subtitle: Text(
+                          'How Caféana protects your account and order data.',
+                          style: TextStyle(
+                              fontSize: 11, color: cs.onSurfaceVariant),
+                        ),
+                        trailing: Icon(
+                          Icons.chevron_right_rounded,
+                          color: cs.onSurfaceVariant.withValues(alpha: 0.5),
+                        ),
+                        onTap: () {
+                          showDialog(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                              title: const Text('Privacy Policy & Data Safety'),
+                              content: const SingleChildScrollView(
+                                child: Text(
+                                  'Caféana collects only your display name, email address, and café order history '
+                                  'to process orders, display live order tracking, and provide loyalty rewards.\n\n'
+                                  '• Data Encryption: All data is transmitted securely over HTTPS/TLS via Google Firebase.\n'
+                                  '• Third Parties: We never sell or share your personal data with third-party advertisers.\n'
+                                  '• Account Deletion: You may permanently delete your account and personal profile data at any time using the "Delete My Account" option in your Profile.',
+                                  style: TextStyle(fontSize: 13, height: 1.45),
+                                ),
+                              ),
+                              actions: [
+                                FilledButton(
+                                  onPressed: () => Navigator.pop(ctx),
+                                  child: const Text('Close'),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
                       ),
-                      child: Icon(
-                        Icons.logout_rounded,
-                        color: cs.error,
-                        size: 20,
+                      Divider(
+                        height: 1,
+                        indent: 16,
+                        endIndent: 16,
+                        color: cs.outlineVariant.withValues(alpha: 0.3),
                       ),
-                    ),
-                    title: const Text(
-                      'Sign Out',
-                      style: TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    subtitle: Text(
-                      'You will be returned to the login screen.',
-                      style: TextStyle(
-                          fontSize: 11, color: cs.onSurfaceVariant),
-                    ),
-                    trailing: Icon(
-                      Icons.chevron_right_rounded,
-                      color: cs.onSurfaceVariant.withValues(alpha: 0.5),
-                    ),
-                    onTap: () async {
-                      final confirm = await AppDialogs.confirm(
-                        context,
-                        title: 'Log Out',
-                        message: 'Are you sure you want to log out?',
-                        isDestructive: true,
-                        confirmText: 'Log Out',
-                      );
-                      if (confirm) {
-                        ref.read(authServiceProvider.notifier).signOut();
-                      }
-                    },
+                      ListTile(
+                        leading: Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: cs.errorContainer.withValues(alpha: 0.5),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(
+                            Icons.logout_rounded,
+                            color: cs.error,
+                            size: 20,
+                          ),
+                        ),
+                        title: const Text(
+                          'Sign Out',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        subtitle: Text(
+                          'You will be returned to the login screen.',
+                          style: TextStyle(
+                              fontSize: 11, color: cs.onSurfaceVariant),
+                        ),
+                        trailing: Icon(
+                          Icons.chevron_right_rounded,
+                          color: cs.onSurfaceVariant.withValues(alpha: 0.5),
+                        ),
+                        onTap: () async {
+                          final confirm = await AppDialogs.confirm(
+                            context,
+                            title: 'Log Out',
+                            message: 'Are you sure you want to log out?',
+                            isDestructive: true,
+                            confirmText: 'Log Out',
+                          );
+                          if (confirm) {
+                            ref.read(authServiceProvider.notifier).signOut();
+                          }
+                        },
+                      ),
+                      Divider(
+                        height: 1,
+                        indent: 16,
+                        endIndent: 16,
+                        color: cs.outlineVariant.withValues(alpha: 0.3),
+                      ),
+                      ListTile(
+                        leading: Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: cs.errorContainer.withValues(alpha: 0.5),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(
+                            Icons.delete_forever_rounded,
+                            color: cs.error,
+                            size: 20,
+                          ),
+                        ),
+                        title: Text(
+                          'Delete My Account',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: cs.error,
+                          ),
+                        ),
+                        subtitle: Text(
+                          'Permanently remove your account and personal info.',
+                          style: TextStyle(
+                              fontSize: 11, color: cs.onSurfaceVariant),
+                        ),
+                        trailing: Icon(
+                          Icons.chevron_right_rounded,
+                          color: cs.onSurfaceVariant.withValues(alpha: 0.5),
+                        ),
+                        onTap: () async {
+                          final confirm = await AppDialogs.confirm(
+                            context,
+                            title: 'Delete Account Permanently?',
+                            message:
+                                'This will permanently delete your Caféana account and anonymize your personal profile information. This action cannot be undone.',
+                            isDestructive: true,
+                            confirmText: 'Delete Forever',
+                          );
+                          if (confirm) {
+                            await ref
+                                .read(authServiceProvider.notifier)
+                                .deleteAccount();
+                            final err = ref.read(authServiceProvider);
+                            if (err.hasError && context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('${err.error}')),
+                              );
+                            }
+                          }
+                        },
+                      ),
+                    ],
                   ),
                 ).animate().fadeIn(delay: 275.ms).slideY(begin: 0.06, end: 0),
               ]),

@@ -163,6 +163,36 @@ class AuthServiceNotifier extends Notifier<AuthState> {
     });
   }
 
+  // ── Delete account (Google Play Data Safety requirement) ─────────────────
+
+  Future<void> deleteAccount() async {
+    state = const AsyncValue.loading();
+    state = await AsyncValue.guard(() async {
+      final user = _auth.currentUser;
+      if (user == null) return;
+
+      // Anonymize personal profile fields allowed by Firestore rules before removing Auth user
+      try {
+        await _db.collection('users').doc(user.uid).update({
+          'displayName': 'Deleted User',
+          'email': '',
+        });
+      } catch (_) {}
+
+      try {
+        await user.delete();
+      } on FirebaseAuthException catch (e) {
+        if (e.code == 'requires-recent-login') {
+          await _auth.signOut();
+          throw Exception(
+            'For security, please sign in again and tap Delete Account immediately to complete permanent deletion.',
+          );
+        }
+        rethrow;
+      }
+    });
+  }
+
   /// Clears any previous error state without performing an action.
   void clearError() => state = const AsyncValue.data(null);
 }

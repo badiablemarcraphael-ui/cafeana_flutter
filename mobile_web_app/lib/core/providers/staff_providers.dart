@@ -57,7 +57,7 @@ final allOrdersProvider = StreamProvider<List<CafeOrder>>((ref) {
   return db
       .collection('orders')
       .orderBy('createdAt', descending: true)
-      .limit(200) // limit for performance in this demo
+      .limit(3500)
       .snapshots()
       .map((snap) => snap.docs
           .map((doc) => CafeOrder.fromFirestore(
