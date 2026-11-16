@@ -10,6 +10,7 @@ import '../core/widgets/cafeana_error_recovery_screen.dart';
 import '../features/auth/presentation/login_page.dart';
 import '../features/auth/presentation/verify_email_page.dart';
 import '../features/public/pages/landing_page.dart';
+import '../features/public/pages/privacy_policy_page.dart';
 import '../features/customer/pages/cart_page.dart';
 import '../features/customer/pages/checkout_page.dart';
 import '../features/customer/pages/customer_home_page.dart';
@@ -40,6 +41,8 @@ abstract final class AppRoutes {
   // Public
   static const landing = '/';
   static const loading = '/loading';
+  static const privacy = '/privacy';
+  static const deleteAccount = '/delete-account';
 
   // Auth
   static const login = '/login';
@@ -96,6 +99,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       final isOnLoadingPage = location == AppRoutes.loading;
       final isOnLoginPage = location == AppRoutes.login;
       final isOnLandingPage = location == AppRoutes.landing;
+      final isOnPublicLegalPage =
+          location == AppRoutes.privacy || location == AppRoutes.deleteAccount;
+
+      if (isOnPublicLegalPage) {
+        return null;
+      }
 
       // 0. While Firebase Auth is restoring session on initial boot:
       if (authAsync.isLoading) {
@@ -193,6 +202,16 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.landing,
         name: 'landing',
         builder: (context, state) => const LandingPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.privacy,
+        name: 'privacy',
+        builder: (context, state) => const PrivacyPolicyPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.deleteAccount,
+        name: 'delete-account',
+        builder: (context, state) => const PrivacyPolicyPage(),
       ),
       GoRoute(
         path: AppRoutes.loading,

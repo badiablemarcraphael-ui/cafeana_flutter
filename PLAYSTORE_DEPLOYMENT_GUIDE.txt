@@ -1,0 +1,135 @@
+========================================================================================
+                CAFEANA? — GOOGLE PLAY STORE DEPLOYMENT CHEAT SHEET
+========================================================================================
+Everything in your codebase is already configured and ready for Google Play Store upload:
+  1. Package ID (`applicationId`)   : com.cafeana.cafeana_app
+  2. Release Keystore (`upload-keystore.jks`) & `key.properties` : Configured in build.gradle.kts
+  3. Internet & Network Permissions : Added to android/app/src/main/AndroidManifest.xml
+  4. In-App Account Deletion UI     : Added in Customer Profile -> "Delete My Account"
+  5. Public Privacy Policy Web URL  : https://cafeana-7fa42.web.app/privacy
+  6. Public Account Deletion URL    : https://cafeana-7fa42.web.app/delete-account
+  7. Ready-to-Upload Store Graphics : Saved in `playstore_assets/` folder:
+       - App Icon (512x512 px)         : playstore_assets/icon_512x512.png
+       - Feature Graphic (1024x500 px) : playstore_assets/feature_graphic_1024x500.png
+========================================================================================
+
+
+STEP 1: BUILD YOUR RELEASE `.aab` BUNDLE FILE
+----------------------------------------------------------------------------------------
+Open a terminal in your project and run:
+
+  cd c:\Users\Personal\OneDrive\Desktop\cafeana_flutter\mobile_web_app
+  flutter build appbundle --release
+
+Once finished, your upload file will be located at:
+  c:\Users\Personal\OneDrive\Desktop\cafeana_flutter\mobile_web_app\build\app\outputs\bundle\release\app-release.aab
+
+*(Optional: If you use Google Sign-In on Android, paste these Release Keystore fingerprints
+into Firebase Console -> Project Settings -> Your Android App -> Add fingerprint)*:
+  - SHA-1  : 90:BE:38:92:67:89:B2:37:8E:5A:88:F3:7E:A1:2C:03:6A:A1:05:E8
+  - SHA-256: E4:82:52:6F:F4:AF:B5:8C:31:11:48:6B:EC:DF:35:5B:BF:B7:C7:59:EA:14:D0:C7:AA:87:DE:E5:6C:9F:A1:3F
+
+
+STEP 2: CREATE THE APP IN GOOGLE PLAY CONSOLE (ONCE ID VERIFICATION COMPLETES)
+----------------------------------------------------------------------------------------
+1. Go to https://play.google.com/console and click "Create app".
+2. Enter:
+   - App name         : Caféana?
+   - Default language : English (United States)
+   - App or game      : App
+   - Free or paid     : Free
+3. Check the declarations (Developer Program Policies & US export laws) and click "Create app".
+
+
+STEP 3: FILL OUT "APP CONTENT" (POLICY -> APP CONTENT ON LEFT SIDEBAR)
+----------------------------------------------------------------------------------------
+Copy and paste these exact answers into each section of "App content":
+
+1. PRIVACY POLICY:
+   - Privacy Policy URL:
+     https://cafeana-7fa42.web.app/privacy
+
+2. APP ACCESS (Required so Google's reviewer can test the app):
+   - Select: "All or some functionality in my app is restricted"
+   - Click "Add new instructions":
+     * Instruction name : Customer Account Login
+     * Username / Email : customer@seed.com
+     * Password         : password123
+     * Any other info   : Sign in with these credentials on the Login screen to browse the menu, place orders, and track order status. Staff/Owner dashboard can also be tested using owner@seed.com / password123.
+
+3. ADS:
+   - Select: "No, my app does not contain ads"
+
+4. CONTENT RATING (IARC Questionnaire):
+   - Email address : (Enter your email)
+   - Category      : Reference, News, or Educational / Utility / Productivity / Food & Drink
+   - Answer "No" to all violence, sexuality, profanity, controlled substances, and gambling questions.
+
+5. TARGET AUDIENCE AND CONTENT:
+   - Target age group: Check ONLY [13-15], [16-17], and [18 and over].
+   - (IMPORTANT: Do NOT check under 13, so you don't trigger Kids/Family policy requirements).
+   - Appeal to children: Select "No".
+
+6. DATA SAFETY:
+   - Does your app collect or share any of the required user data types? -> YES
+   - Is all of the user data collected by your app encrypted in transit? -> YES
+   - Do you provide a way for users to request that their data is deleted? -> YES
+   - Delete Account Web URL:
+     https://cafeana-7fa42.web.app/delete-account
+   - Data Types Collected:
+     * Personal info -> Check "Name" and "Email address"
+       - Is it collected, shared, or both? -> Collected only (NOT shared)
+       - Is it processed ephemerally? -> No
+       - Is data collection required or optional? -> Users cannot opt out (Required for account)
+       - Why is this user data collected? -> Check "App functionality" and "Account management"
+
+7. GOVERNMENT APPS / FINANCIAL FEATURES / HEALTH:
+   - Government app : No
+   - Financial features : "My app doesn't provide any financial features" (it only orders physical café drinks/food)
+   - Health apps : "My app does not have any health features"
+
+
+STEP 4: FILL OUT "MAIN STORE LISTING" (GROW -> STORE PRESENCE -> MAIN STORE LISTING)
+----------------------------------------------------------------------------------------
+Copy and paste these into your Store Listing:
+
+* App name (up to 30 chars):
+  Caféana?
+
+* Short description (up to 80 chars):
+  Order handcrafted coffee, customize drinks, and track your café order live.
+
+* Full description (up to 4000 chars):
+  Welcome to Caféana? — your smart café companion for ordering handcrafted specialty coffee, non-coffee favorites, and refreshing fizzy drinks.
+
+  KEY FEATURES FOR CUSTOMERS:
+  • Browse the Full Menu: Explore Classics, Specialty Iced Coffee, Premiums, Non-Coffee Milk Drinks, and Sugar-Free Fizzy Drinks.
+  • Customize Your Cup: Choose your cup size (12 oz, 16 oz, 22 oz), sugar level, ice level, and add-ons (espresso shots, oatmilk, syrups, and sauces).
+  • Live Order Tracking: Follow your order in real time from Queued to Preparing to Ready for pickup, synced directly with our kitchen terminal.
+  • Promo Codes & Community Reviews: Apply store promotions at checkout and share ratings and feedback with the Caféana community.
+
+  KEY FEATURES FOR STAFF & OWNERS:
+  • Live Kitchen & Cashier Queue: Manage incoming dine-in and take-out orders with real-time IoT terminal integration.
+  • Smart Inventory & Recipe Tracking: Automatic ingredient deduction per cup size with low-stock alerts.
+  • All-in-One Analytics Dashboard: Descriptive, predictive, and prescriptive insights for daily revenue, order volume, peak hours, top-selling drinks, and customer loyalty.
+
+* Graphics to upload:
+  1. App icon (512 x 512 px)         : Upload `playstore_assets/icon_512x512.png`
+  2. Feature graphic (1024 x 500 px) : Upload `playstore_assets/feature_graphic_1024x500.png`
+  3. Phone screenshots (2 to 8 PNGs) : Take 3–4 screenshots of your app (Menu, Cart, Order Tracking, Analytics) and upload them to both "Phone screenshots" and "7-inch / 10-inch tablet screenshots".
+
+
+STEP 5: UPLOAD YOUR `.aab` & ROLL OUT
+----------------------------------------------------------------------------------------
+1. On the left menu, go to "Testing -> Closed testing" (or "Production").
+   - Note: For personal developer accounts created after Nov 2023, Google requires running
+     a Closed Test with 12 testers opted in for 14 days before unlocking Production.
+2. Click "Create new release".
+3. Under "App integrity / Play App Signing", let Google manage your signing key (default).
+4. Upload `mobile_web_app/build/app/outputs/bundle/release/app-release.aab`.
+5. Release notes:
+   <en-US>
+   Initial release of Caféana? featuring online drink customization, real-time order status tracking, IoT kitchen queue sync, and smart café analytics.
+   </en-US>
+6. Click "Next" -> "Save" -> "Start rollout".
+========================================================================================
