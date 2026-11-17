@@ -12,8 +12,14 @@ val newBuildDir: Directory =
 rootProject.layout.buildDirectory.value(newBuildDir)
 
 subprojects {
-    val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
-    project.layout.buildDirectory.value(newSubprojectBuildDir)
+    if (project.name == "app") {
+        val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
+        project.layout.buildDirectory.value(newSubprojectBuildDir)
+    } else {
+        // Keep plugin intermediate build files outside OneDrive to prevent file locking
+        val tempSubDir = java.io.File(System.getProperty("java.io.tmpdir"), "cafeana_subbuilds/${project.name}")
+        project.layout.buildDirectory.set(tempSubDir)
+    }
 }
 subprojects {
     project.evaluationDependsOn(":app")
